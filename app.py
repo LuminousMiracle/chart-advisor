@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from groq import Groq
 from datetime import datetime, timedelta, timezone
+import streamlit.components.v1 as components  # 👈 ⭐ 이 줄을 추가해 주세요!
 
 # 한국 시간(KST) 설정
 KST = timezone(timedelta(hours=9))
@@ -691,26 +692,61 @@ if st.session_state.mode == "home":
         indices, fund_flow, sector_data, stock_perf, fetch_time = get_all_home_data()
 
    # ⭐ 사이드바에 만들어둔 빈 공간에 업데이트 시간을 렌더링합니다. (다음 업데이트 = 현재 + 5분)
-    current_time = datetime.now(KST)
     next_update = fetch_time + timedelta(seconds=300)
     
-    refresh_placeholder.markdown(f"""
-    <div style='background:#1a1e2a; border:1px solid #2a3040; border-radius:8px; padding:12px; margin-top:-10px; margin-bottom:12px;'>
-        <div style='font-size:11px; color:#94a3b8; margin-bottom:8px;'>🕒 시간 정보 & 데이터 갱신 (5분)</div>
-        <div style='font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between; margin-bottom:4px;'>
+    # ⬇️ 여기서부터 덮어씌워 주세요 ⬇️
+    fetch_time_str = fetch_time.strftime('%H:%M:%S')
+    next_update_str = next_update.strftime('%H:%M:%S')
+
+    # 자바스크립트를 주입하여 1초마다 브라우저에서 시계가 움직이도록 만듭니다.
+    clock_html = f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+        body {{ margin: 0; padding: 0; background-color: transparent; font-family: 'Noto Sans KR', sans-serif; }}
+        .time-panel {{ background:#1a1e2a; border:1px solid #2a3040; border-radius:8px; padding:12px; }}
+        .title {{ font-size:11px; color:#94a3b8; margin-bottom:8px; font-weight:400; }}
+        .row {{ font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between; margin-bottom:5px; align-items:center; }}
+        .clock {{ color:#60a5fa; font-family:'DM Mono', monospace; font-weight:700; font-size:13px; }}
+        .fetch {{ color:#4ade80; font-family:'DM Mono', monospace; font-weight:700; font-size:13px; }}
+        .next {{ color:#fbbf24; font-family:'DM Mono', monospace; font-weight:700; font-size:13px; }}
+    </style>
+    <div class="time-panel">
+        <div class="title">🕒 시간 정보 & 데이터 갱신 (5분)</div>
+        <div class="row">
             <span>현재 시간</span>
-            <b style='color:#60a5fa; font-family:DM Mono,monospace;'>{current_time.strftime('%H:%M:%S')}</b>
+            <span class="clock" id="live-clock">--:--:--</span>
         </div>
-        <div style='font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between; margin-bottom:4px;'>
+        <div class="row">
             <span>마지막 업데이트</span>
-            <b style='color:#4ade80; font-family:DM Mono,monospace;'>{fetch_time.strftime('%H:%M:%S')}</b>
+            <span class="fetch">{fetch_time_str}</span>
         </div>
-        <div style='font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between;'>
+        <div class="row" style="margin-bottom:0;">
             <span>다음 업데이트</span>
-            <b style='color:#fbbf24; font-family:DM Mono,monospace;'>{next_update.strftime('%H:%M:%S')}</b>
+            <span class="next">{next_update_str}</span>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    <script>
+        function updateTime() {{
+            const now = new Date();
+            // 사용자의 기기 시간을 기준으로 한국 시간(KST)을 계산하여 표시
+            const kstOffset = 9 * 60; 
+            const localOffset = now.getTimezoneOffset();
+            const kstTime = new Date(now.getTime() + (kstOffset + localOffset) * 60000);
+            
+            const hh = String(kstTime.getHours()).padStart(2, '0');
+            const mm = String(kstTime.getMinutes()).padStart(2, '0');
+            const ss = String(kstTime.getSeconds()).padStart(2, '0');
+            document.getElementById('live-clock').innerText = hh + ':' + mm + ':' + ss;
+        }}
+        setInterval(updateTime, 1000);
+        updateTime();
+    </script>
+    """
+    
+    # Streamlit의 components 모듈을 사용해 HTML/JS를 사이드바에 렌더링 (높이 고정)
+    with refresh_placeholder:
+        components.html(clock_html, height=120)
+    # ⬆️ 여기까지 덮어씌워 주세요 ⬆️
 
     # 1. 글로벌 투자자금 흐름
     st.markdown("## 💰 글로벌 투자자금 흐름")
