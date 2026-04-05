@@ -824,89 +824,98 @@ if st.session_state.mode == "home":
 
     st.markdown("---")
 
-    # 2. 글로벌 섹터 히트맵 (자금 흐름)
-    st.markdown("## 🗺️ 글로벌 섹터 히트맵")
-    st.caption("미국 11개 섹터 1주 수익률 기준 · 박스에 마우스를 올려 주도주를 확인하세요")
-    
-    if sector_data:
-        labels = []
-        parents = []
-        values = []
-        colors = []
-        customdata = []
-        text_labels = [] # ⭐ 화면에 표시될 텍스트를 미리 예쁘게 조립
+   # 2. 글로벌 섹터 히트맵
+st.markdown("## 🗺️ 글로벌 섹터 히트맵")
+st.caption("미국 11개 섹터 1주 수익률 · 박스에 마우스를 올려 주도주 확인")
 
-        for name, data in sector_data.items():
-            ret = data["ret1w"]
-            labels.append(name)
-            parents.append("") 
-            values.append(1)   
-            colors.append(ret)
-            
-            # 툴팁용 주도주/다크호스 데이터 가공
-            leaders = ", ".join(data.get("stocks", {}).get("leader", []))
-            darks = ", ".join(data.get("stocks", {}).get("dark", []))
-            customdata.append([ret, data["ret1m"], leaders, darks])
-            
-            # ⭐ 소수점 둘째 자리까지만 나오도록 강제 포맷팅 & 글씨체 세련되게 적용
-            sign = "+" if ret > 0 else ""
-            text_labels.append(f"<b style='font-size:15px; font-family:Noto Sans KR;'>{name}</b><br><span style='font-size:18px; font-family:DM Mono, monospace; font-weight:700;'>{sign}{ret:.2f}%</span>")
+if sector_data:
+    sorted_s = sorted(sector_data.items(), key=lambda x: x[1]["ret1w"], reverse=True)
+    best, worst = sorted_s[0], sorted_s[-1]
 
-        # Plotly Treemap 생성
-        fig = go.Figure(go.Treemap(
-            labels=labels,
-            parents=parents,
-            values=values,
-            text=text_labels,
-            textinfo="text",
-            marker=dict(
-                colors=colors,
-                # ⭐ 촌스러운 원색 대신 반투명하고 부드러운 네온 그라데이션 적용
-                colorscale=[
-                    [0.0, 'rgba(248, 113, 113, 0.7)'],   # 하락 (부드러운 빨강)
-                    [0.4, 'rgba(248, 113, 113, 0.1)'],   # 약보합 (어두운 빨강)
-                    [0.5, '#1e2130'],                    # 0% 보합 (사이드바 색상)
-                    [0.6, 'rgba(74, 222, 128, 0.15)'],   # 강보합 (어두운 초록)
-                    [1.0, 'rgba(74, 222, 128, 0.6)']     # 상승 (부드러운 네온 초록)
-                ],
-                cmid=0,
-                line=dict(width=4, color='#0d0f14') # ⭐ 박스 테두리를 배경색과 똑같이 맞추고 두껍게 해서 둥둥 떠있는 갤러리 느낌 연출
-            ),
-            customdata=customdata,
-            hovertemplate=(
-                "<b style='font-size:14px; color:#f0f2f8;'>%{label}</b><br>"
-                "<hr style='border-color:#2a3040; margin:6px 0;'>"
-                "📈 1주 수익률: <b style='color:#ffffff; font-family:DM Mono'>%{customdata[0]:+.2f}%</b><br>"
-                "📊 1달 수익률: <span style='font-family:DM Mono; color:#94a3b8;'>%{customdata[1]:+.2f}%</span><br><br>"
-                "👑 <span style='color:#94a3b8;'>선두:</span> %{customdata[2]}<br>"
-                "⚡ <span style='color:#fbbf24;'>다크호스:</span> %{customdata[3]}"
-                "<extra></extra>"
-            ),
-            pathbar=dict(visible=False) # ⭐ 상단에 뜨는 불필요한 회색 경로바(Pathbar) 숨김
-        ))
-        
-        fig.update_layout(
-            margin=dict(t=0, l=0, r=0, b=0),
-            paper_bgcolor="rgba(0,0,0,0)", # 배경 투명화
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=420,
-            hoverlabel=dict(bgcolor="#151820", font_size=13, font_family="Noto Sans KR", bordercolor="#4ade80") # 툴팁 테두리 네온 포인트
-        )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        
-        # 하단 요약 패널 (가장 뜨거운 섹터와 차가운 섹터)
-        sorted_sectors = sorted(sector_data.items(), key=lambda x: x[1]["ret1w"], reverse=True)
-        best, worst = sorted_sectors[0], sorted_sectors[-1]
-        st.markdown(f"""
-        <div style='display:flex; justify-content:space-between; gap:12px; margin-top:-10px; margin-bottom: 20px;'>
-            <div style='flex:1; background:rgba(74, 222, 128, 0.05); border:1px solid rgba(74, 222, 128, 0.3); border-radius:8px; padding:12px 16px; font-size:13px; color:#4ade80;'>
-                🔥 <b>자금 유입 1위:</b> {best[0]} <span style='font-family:DM Mono; font-weight:700;'>({best[1]['ret1w']:+.2f}%)</span>
-            </div>
-            <div style='flex:1; background:rgba(248, 113, 113, 0.05); border:1px solid rgba(248, 113, 113, 0.3); border-radius:8px; padding:12px 16px; font-size:13px; color:#f87171;'>
-                ❄️ <b>자금 이탈 1위:</b> {worst[0]} <span style='font-family:DM Mono; font-weight:700;'>({worst[1]['ret1w']:+.2f}%)</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    def ret_color(r):
+        if r > 4:    return "#14532d", "#4ade80"
+        if r > 2:    return "#166534", "#86efac"
+        if r > 0.5:  return "#1a3d2a", "#6ee7a0"
+        if r > 0:    return "#1a2820", "#5a8a6a"
+        if r > -2:   return "#3d1a1a", "#fca5a5"
+        if r > -4:   return "#5a1a1a", "#f87171"
+        return "#7f1d1d", "#ef4444"
+
+    # 수익률 절댓값에 따라 박스 너비 결정 (최소 1, 최대 4)
+    max_abs = max(abs(v["ret1w"]) for _, v in sector_data.items()) or 1
+
+    cells_html = ""
+    for name, data in sorted_s:
+        r = data["ret1w"]
+        r1m = data["ret1m"]
+        bg, fg = ret_color(r)
+        sign = "+" if r >= 0 else ""
+        bar_w = int(min(100, abs(r) / max_abs * 100))
+        leaders = ", ".join(data.get("stocks", {}).get("leader", []))
+        darks   = ", ".join(data.get("stocks", {}).get("dark",   []))
+        # 박스 flex-grow를 절댓값으로 설정
+        flex = max(1, int(abs(r) / max_abs * 4 + 0.5))
+
+        cells_html += f"""
+<div style='flex:{flex};min-width:80px;background:{bg};border-radius:8px;padding:12px 14px;
+    cursor:default;position:relative;overflow:hidden;transition:transform 0.15s;'
+    onmouseenter='showTT(this,"{name}","{sign}{r:.2f}%","{("+" if r1m>=0 else "")}{r1m:.2f}%","{leaders}","{darks}","{fg}")'
+    onmouseleave='hideTT()'>
+  <div style='font-size:11px;color:{fg};opacity:0.7;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{name}</div>
+  <div style='font-size:20px;font-weight:700;color:{fg};letter-spacing:-0.5px;'>{sign}{r:.2f}%</div>
+  <div style='position:absolute;bottom:0;left:0;height:3px;width:{bar_w}%;background:{fg};opacity:0.4;'></div>
+</div>"""
+
+    st.markdown(f"""
+<div style='position:relative;'>
+  <div style='display:flex;gap:3px;height:140px;'>
+    {cells_html}
+  </div>
+  <div id='hm-tt' style='display:none;position:absolute;background:#0f1218;border:1px solid #2a3040;
+      border-radius:10px;padding:14px 16px;width:220px;z-index:100;pointer-events:none;
+      box-shadow:0 8px 24px rgba(0,0,0,0.6);font-family:monospace;font-size:12px;'>
+    <div id='hm-tt-name' style='font-size:13px;font-weight:700;color:#f0f2f8;margin-bottom:8px;'></div>
+    <div style='color:#5a6070;margin-bottom:2px;'>1주 <span id='hm-tt-1w' style='font-weight:700;'></span></div>
+    <div style='color:#5a6070;margin-bottom:8px;'>1달 <span id='hm-tt-1m' style='color:#94a3b8;'></span></div>
+    <div style='border-top:1px solid #1e2130;padding-top:8px;margin-bottom:4px;color:#5a6070;font-size:11px;'>👑 선두</div>
+    <div id='hm-tt-leaders' style='margin-bottom:8px;'></div>
+    <div style='color:#fbbf24;font-size:11px;margin-bottom:4px;'>⚡ 다크호스</div>
+    <div id='hm-tt-darks'></div>
+  </div>
+</div>
+<script>
+function showTT(el,name,w1,m1,leaders,darks,fg){{
+  document.getElementById('hm-tt-name').textContent=name;
+  document.getElementById('hm-tt-1w').textContent=w1;
+  document.getElementById('hm-tt-1w').style.color=fg;
+  document.getElementById('hm-tt-1m').textContent=m1;
+  document.getElementById('hm-tt-leaders').innerHTML=leaders.split(',').map(t=>`<span style='display:inline-block;background:#1a1e2a;border-radius:4px;padding:2px 6px;margin:2px;font-size:10px;color:#94a3b8;'>${{t.trim()}}</span>`).join('');
+  document.getElementById('hm-tt-darks').innerHTML=darks.split(',').map(t=>`<span style='display:inline-block;background:#1a1500;border:1px solid #3a3010;border-radius:4px;padding:2px 6px;margin:2px;font-size:10px;color:#fbbf24;'>${{t.trim()}}</span>`).join('');
+  const tt=document.getElementById('hm-tt');
+  const r=el.getBoundingClientRect();
+  tt.style.display='block';
+}}
+function hideTT(){{document.getElementById('hm-tt').style.display='none';}}
+</script>
+<div style='display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:#3a4050;'>
+  <span>하락</span>
+  <div style='width:100px;height:5px;border-radius:3px;background:linear-gradient(to right,#7f1d1d,#1e2130,#14532d);'></div>
+  <span>상승</span>
+  <span style='margin-left:12px;'>박스 너비 = 수익률 크기</span>
+</div>
+<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;'>
+  <div style='padding:10px 14px;border-radius:8px;background:rgba(20,83,45,0.4);border:1px solid rgba(74,222,128,0.2);color:#4ade80;'>
+    <div style='font-size:10px;opacity:0.6;margin-bottom:2px;'>자금 유입 1위</div>
+    <div style='font-weight:700;'>{best[0]}</div>
+    <div style='font-size:18px;font-weight:700;'>+{best[1]['ret1w']:.2f}%</div>
+  </div>
+  <div style='padding:10px 14px;border-radius:8px;background:rgba(127,29,29,0.4);border:1px solid rgba(248,113,113,0.2);color:#f87171;'>
+    <div style='font-size:10px;opacity:0.6;margin-bottom:2px;'>자금 이탈 1위</div>
+    <div style='font-weight:700;'>{worst[0]}</div>
+    <div style='font-size:18px;font-weight:700;'>{worst[1]['ret1w']:.2f}%</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
     
     st.markdown("---")
 
