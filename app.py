@@ -5,6 +5,10 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from groq import Groq
+from datetime import datetime, timedelta, timezone
+
+# 한국 시간(KST) 설정
+KST = timezone(timedelta(hours=9))
 
 st.set_page_config(page_title="차트 분석 어드바이저", page_icon="📈", layout="wide")
 
@@ -15,7 +19,7 @@ html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 .stApp { background-color: #0d0f14; }
 [data-testid="stSidebar"] { background-color: #111318; border-right: 1px solid #1e2130; }
 
-/* ⬇️ 스크롤바 커스텀 (다크모드 몰입감 100%) */
+/* 스크롤바 커스텀 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: #0d0f14; }
 ::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 4px; }
@@ -25,7 +29,7 @@ html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 div.stButton > button { background: #4ade80; color: #0d1a0f; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; padding: 10px 24px; width: 100%; margin-bottom: 8px; transition: all 0.2s ease; }
 div.stButton > button:hover { background: #22c55e; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2); }
 
-/* ⬇️ AI 분석 박스 글로우 효과 (하이라이트 느낌) */
+/* AI 분석 박스 글로우 효과 */
 .analysis-box { 
     background: linear-gradient(145deg, #111620 0%, #0d0f14 100%); 
     border: 1px solid #1e3040; 
@@ -39,15 +43,9 @@ div.stButton > button:hover { background: #22c55e; transform: translateY(-2px); 
     box-shadow: 0 0 15px rgba(74, 222, 128, 0.05);
 }
 
-/* ⬇️ 공통 카드 클래스 애니메이션 (마우스 올리면 반응) */
-.hover-card {
-    transition: all 0.3s ease;
-}
-.hover-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-    border-color: #2a3040 !important;
-}
+/* 공통 카드 클래스 애니메이션 */
+.hover-card { transition: all 0.3s ease; }
+.hover-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); border-color: #2a3040 !important; }
 
 .signal-card { background: #151820; border: 1px solid #1e2130; border-radius: 10px; padding: 14px 18px; margin-bottom: 8px; }
 .confidence-bar { height: 8px; border-radius: 4px; margin-top: 6px; }
@@ -122,13 +120,11 @@ def calc_indicators(df):
     low   = df["Low"].squeeze()
     vol   = df["Volume"].squeeze()
 
-    # 이동평균
     df["MA5"]   = close.rolling(5).mean()
     df["MA20"]  = close.rolling(20).mean()
     df["MA60"]  = close.rolling(60).mean()
     df["MA120"] = close.rolling(120).mean()
 
-    # 볼린저밴드
     bb_mid = close.rolling(20).mean()
     bb_std = close.rolling(20).std()
     df["BB_upper"] = bb_mid + 2*bb_std
@@ -136,43 +132,37 @@ def calc_indicators(df):
     df["BB_mid"]   = bb_mid
     df["BB_width"] = (df["BB_upper"]-df["BB_lower"])/bb_mid
 
-    # RSI
     delta = close.diff()
     gain  = delta.clip(lower=0).rolling(14).mean()
     loss  = (-delta.clip(upper=0)).rolling(14).mean()
     rs    = gain / loss.replace(0, np.nan)
     df["RSI"] = 100 - 100/(1+rs)
 
-    # 스토캐스틱 RSI
     rsi     = df["RSI"]
     rsi_min = rsi.rolling(14).min()
     rsi_max = rsi.rolling(14).max()
     df["StochRSI_K"] = ((rsi-rsi_min)/(rsi_max-rsi_min+1e-10)).rolling(3).mean()*100
     df["StochRSI_D"] = df["StochRSI_K"].rolling(3).mean()
 
-    # MACD
     ema12 = close.ewm(span=12,adjust=False).mean()
     ema26 = close.ewm(span=26,adjust=False).mean()
     df["MACD"]        = ema12-ema26
     df["MACD_signal"] = df["MACD"].ewm(span=9,adjust=False).mean()
     df["MACD_hist"]   = df["MACD"]-df["MACD_signal"]
 
-    # ATR
     tr = pd.concat([high-low, (high-close.shift()).abs(), (low-close.shift()).abs()], axis=1).max(axis=1)
     df["ATR"] = tr.rolling(14).mean()
 
-    # 거래량 이동평균
     df["Vol_MA20"] = vol.rolling(20).mean()
 
-    # ── 일목균형표 (Ichimoku)
     high9  = high.rolling(9).max();  low9  = low.rolling(9).min()
     high26 = high.rolling(26).max(); low26 = low.rolling(26).min()
     high52 = high.rolling(52).max(); low52 = low.rolling(52).min()
-    df["Tenkan"]   = (high9  + low9)  / 2          # 전환선 (9일)
-    df["Kijun"]    = (high26 + low26) / 2          # 기준선 (26일)
-    df["SenkouA"]  = ((df["Tenkan"]+df["Kijun"])/2).shift(26)   # 선행스팬A
-    df["SenkouB"]  = ((high52+low52)/2).shift(26)               # 선행스팬B
-    df["Chikou"]   = close.shift(-26)                           # 후행스팬
+    df["Tenkan"]   = (high9  + low9)  / 2          
+    df["Kijun"]    = (high26 + low26) / 2          
+    df["SenkouA"]  = ((df["Tenkan"]+df["Kijun"])/2).shift(26)   
+    df["SenkouB"]  = ((high52+low52)/2).shift(26)               
+    df["Chikou"]   = close.shift(-26)                           
 
     return df
 
@@ -223,20 +213,13 @@ def detect_divergence(df):
 # 핵심: 교차 검증 엔진
 # ══════════════════════════════════════
 def cross_validate(df_daily, df_weekly):
-    """
-    5가지 기법 교차 검증 → 신뢰도 점수 산출
-    각 기법이 매수 신호를 보내면 점수 부여
-    """
     signals = []
     score   = 0
     max_score = 0
-
     close_d = df_daily["Close"].squeeze()
     cur = float(close_d.iloc[-1])
 
-    # ──────────────────────────────────
-    # 1. 엘리어트 파동 위치 추정 (20점)
-    # ──────────────────────────────────
+    # 1. 엘리어트
     max_score += 20
     rsi_cur  = float(df_daily["RSI"].iloc[-1])
     rsi_prev = float(df_daily["RSI"].iloc[-2])
@@ -249,11 +232,8 @@ def cross_validate(df_daily, df_weekly):
     vol_ma20 = float(df_daily["Vol_MA20"].iloc[-1])
     vol_ratio = vol_cur/vol_ma20 if vol_ma20 else 1
 
-    # 2파/4파 완료 신호 (매수 적기)
-    elliott_buy = False
     elliott_label = "파악 어려움"
     if rsi_cur < 40 and rsi_cur > rsi_prev and macd_h > macd_hp:
-        elliott_buy = True
         elliott_label = "2파/4파 완료 추정 (RSI 반등+MACD 상승 전환)"
         score += 20
         signals.append(("🌊 엘리어트", "매수", elliott_label, 20))
@@ -268,9 +248,7 @@ def cross_validate(df_daily, df_weekly):
     else:
         signals.append(("🌊 엘리어트", "관망", elliott_label, 0))
 
-    # ──────────────────────────────────
-    # 2. 일목균형표 (25점)
-    # ──────────────────────────────────
+    # 2. 일목
     max_score += 25
     ichi_score = 0
     ichi_signals = []
@@ -281,27 +259,12 @@ def cross_validate(df_daily, df_weekly):
         senkou_b = float(df_daily["SenkouB"].iloc[-1])
         cloud_top = max(senkou_a, senkou_b)
         cloud_bot = min(senkou_a, senkou_b)
-
-        # 조건 1: 가격이 구름 위 (5점)
-        if cur > cloud_top:
-            ichi_score += 5; ichi_signals.append("가격>구름(상승장)")
-        elif cur < cloud_bot:
-            ichi_score -= 5; ichi_signals.append("가격<구름(하락장)")
-
-        # 조건 2: 전환선 > 기준선 (5점)
-        if tenkan > kijun:
-            ichi_score += 5; ichi_signals.append("전환선>기준선(단기상승)")
-
-        # 조건 3: 전환선이 기준선을 상향 돌파 (골든크로스) (10점)
-        tenkan_prev = float(df_daily["Tenkan"].iloc[-2])
-        kijun_prev  = float(df_daily["Kijun"].iloc[-2])
-        if tenkan > kijun and tenkan_prev <= kijun_prev:
-            ichi_score += 10; ichi_signals.append("전환/기준 골든크로스!")
-
-        # 조건 4: 구름이 상승 구름 (SenkouA > SenkouB) (5점)
-        if senkou_a > senkou_b:
-            ichi_score += 5; ichi_signals.append("상승 구름(미래 지지)")
-
+        if cur > cloud_top: ichi_score += 5; ichi_signals.append("가격>구름(상승장)")
+        elif cur < cloud_bot: ichi_score -= 5; ichi_signals.append("가격<구름(하락장)")
+        if tenkan > kijun: ichi_score += 5; ichi_signals.append("전환선>기준선(단기상승)")
+        tenkan_prev = float(df_daily["Tenkan"].iloc[-2]); kijun_prev  = float(df_daily["Kijun"].iloc[-2])
+        if tenkan > kijun and tenkan_prev <= kijun_prev: ichi_score += 10; ichi_signals.append("전환/기준 골든크로스!")
+        if senkou_a > senkou_b: ichi_score += 5; ichi_signals.append("상승 구름(미래 지지)")
         ichi_score = max(0, min(25, ichi_score))
         score += ichi_score
         ichi_label = " / ".join(ichi_signals) if ichi_signals else "신호 없음"
@@ -310,9 +273,7 @@ def cross_validate(df_daily, df_weekly):
     except:
         signals.append(("☁️ 일목균형표", "계산오류", "데이터 부족", 0))
 
-    # ──────────────────────────────────
-    # 3. 멀티타임프레임 (주봉) (20점)
-    # ──────────────────────────────────
+    # 3. 주봉
     max_score += 20
     mtf_score = 0
     mtf_label = "주봉 데이터 없음"
@@ -330,25 +291,13 @@ def cross_validate(df_daily, df_weekly):
             w_kijun  = float(df_weekly["Kijun"].iloc[-1])
 
             mtf_sigs = []
-            # 주봉 추세 확인
-            if w_cur > w_ma20 > w_ma60:
-                mtf_score += 8; mtf_sigs.append("주봉 정배열(대세 상승)")
-            elif w_cur > w_ma20:
-                mtf_score += 4; mtf_sigs.append("주봉 단기 상승")
-            # 주봉 RSI
-            if 40 <= w_rsi <= 60:
-                mtf_score += 4; mtf_sigs.append(f"주봉RSI중립({w_rsi:.0f})-진입유리")
-            elif w_rsi < 40:
-                mtf_score += 6; mtf_sigs.append(f"주봉RSI과매도({w_rsi:.0f})-반등구간")
-            # 주봉 MACD 상승 전환
-            if w_macd_h > 0 and w_macd_hp <= 0:
-                mtf_score += 6; mtf_sigs.append("주봉 MACD 골든크로스!")
-            elif w_macd_h > w_macd_hp:
-                mtf_score += 2; mtf_sigs.append("주봉 MACD 상승 중")
-            # 주봉 일목 전환선 > 기준선
-            if w_tenkan > w_kijun:
-                mtf_score += 4; mtf_sigs.append("주봉 전환>기준")
-
+            if w_cur > w_ma20 > w_ma60: mtf_score += 8; mtf_sigs.append("주봉 정배열(대세 상승)")
+            elif w_cur > w_ma20: mtf_score += 4; mtf_sigs.append("주봉 단기 상승")
+            if 40 <= w_rsi <= 60: mtf_score += 4; mtf_sigs.append(f"주봉RSI중립({w_rsi:.0f})-진입유리")
+            elif w_rsi < 40: mtf_score += 6; mtf_sigs.append(f"주봉RSI과매도({w_rsi:.0f})-반등구간")
+            if w_macd_h > 0 and w_macd_hp <= 0: mtf_score += 6; mtf_sigs.append("주봉 MACD 골든크로스!")
+            elif w_macd_h > w_macd_hp: mtf_score += 2; mtf_sigs.append("주봉 MACD 상승 중")
+            if w_tenkan > w_kijun: mtf_score += 4; mtf_sigs.append("주봉 전환>기준")
             mtf_score = min(20, mtf_score)
             mtf_label = " / ".join(mtf_sigs) if mtf_sigs else "신호 없음"
             direction = "매수" if mtf_score >= 14 else "관망→매수준비" if mtf_score >= 8 else "관망"
@@ -359,26 +308,19 @@ def cross_validate(df_daily, df_weekly):
     else:
         signals.append(("📅 멀티타임프레임(주봉)", "데이터부족", mtf_label, 0))
 
-    # ──────────────────────────────────
-    # 4. 피보나치 지지 확인 (15점)
-    # ──────────────────────────────────
+    # 4. 피보나치
     max_score += 15
     fib_score = 0
     fib_label = "지지구간 미확인"
     try:
         ret, ext, sh, sl = calc_fibonacci(df_daily)
         fib_sigs = []
-        # 핵심 지지 레벨 근접 여부
         for label, val in ret.items():
-            if abs(cur-val)/val < 0.02:  # 2% 이내
-                if label in ["38.2%","50%","61.8%"]:
-                    fib_score += 10; fib_sigs.append(f"피보 {label} 지지({val:,.0f})")
-                elif label in ["23.6%","78.6%"]:
-                    fib_score += 5; fib_sigs.append(f"피보 {label} 지지({val:,.0f})")
-        # 확장 레벨 (목표가 도달 여부 - 매도 신호)
-        for label, val in ext.items():
             if abs(cur-val)/val < 0.02:
-                fib_sigs.append(f"피보 확장 {label} 도달 — 익절 고려")
+                if label in ["38.2%","50%","61.8%"]: fib_score += 10; fib_sigs.append(f"피보 {label} 지지({val:,.0f})")
+                elif label in ["23.6%","78.6%"]: fib_score += 5; fib_sigs.append(f"피보 {label} 지지({val:,.0f})")
+        for label, val in ext.items():
+            if abs(cur-val)/val < 0.02: fib_sigs.append(f"피보 확장 {label} 도달 — 익절 고려")
         fib_score = min(15, fib_score)
         fib_label = " / ".join(fib_sigs) if fib_sigs else "주요 레벨 미근접"
         direction = "매수" if fib_score >= 10 else "참고" if fib_score >= 5 else "대기"
@@ -387,27 +329,18 @@ def cross_validate(df_daily, df_weekly):
     except:
         signals.append(("📐 피보나치", "계산오류", "계산 실패", 0))
 
-    # ──────────────────────────────────
-    # 5. 다이버전스 + 모멘텀 (20점)
-    # ──────────────────────────────────
+    # 5. 다이버전스
     max_score += 20
     mom_score = 0
     mom_sigs = []
     divs = detect_divergence(df_daily)
     for d_type, d_msg in divs:
-        if "강세" in d_type:
-            mom_score += 15; mom_sigs.append(d_msg)
-        elif "약세" in d_type:
-            mom_score -= 5;  mom_sigs.append(d_msg)
+        if "강세" in d_type: mom_score += 15; mom_sigs.append(d_msg)
+        elif "약세" in d_type: mom_score -= 5;  mom_sigs.append(d_msg)
 
-    # MACD 골든크로스
-    if macd_h > 0 and macd_hp <= 0:
-        mom_score += 5; mom_sigs.append("MACD 골든크로스")
-    # 스토캐스틱RSI 과매도 반등
-    stoch_k = float(df_daily["StochRSI_K"].iloc[-1])
-    stoch_kp = float(df_daily["StochRSI_K"].iloc[-2])
-    if stoch_k < 20 and stoch_k > stoch_kp:
-        mom_score += 5; mom_sigs.append(f"StochRSI 과매도 반등({stoch_k:.0f})")
+    if macd_h > 0 and macd_hp <= 0: mom_score += 5; mom_sigs.append("MACD 골든크로스")
+    stoch_k = float(df_daily["StochRSI_K"].iloc[-1]); stoch_kp = float(df_daily["StochRSI_K"].iloc[-2])
+    if stoch_k < 20 and stoch_k > stoch_kp: mom_score += 5; mom_sigs.append(f"StochRSI 과매도 반등({stoch_k:.0f})")
 
     mom_score = max(0, min(20, mom_score))
     mom_label = " / ".join(mom_sigs) if mom_sigs else "다이버전스 없음"
@@ -415,40 +348,19 @@ def cross_validate(df_daily, df_weekly):
     signals.append(("⚡ 다이버전스+모멘텀", direction, mom_label, mom_score))
     score += mom_score
 
-    # ──────────────────────────────────
-    # 신뢰도 계산
-    # ──────────────────────────────────
     confidence = int(score / max_score * 100) if max_score else 0
-
-    # 매수 신호 일치 개수
     buy_count = sum(1 for s in signals if s[1] in ["매수","추세추종매수"])
 
-    # 최종 판정
-    if confidence >= 75 and buy_count >= 3:
-        verdict = "강한 매수"
-        verdict_color = "#4ade80"
-    elif confidence >= 60 and buy_count >= 2:
-        verdict = "매수"
-        verdict_color = "#86efac"
-    elif confidence >= 45:
-        verdict = "관망→매수준비"
-        verdict_color = "#fbbf24"
-    elif confidence < 30:
-        verdict = "관망/매도검토"
-        verdict_color = "#f87171"
-    else:
-        verdict = "관망"
-        verdict_color = "#94a3b8"
+    if confidence >= 75 and buy_count >= 3: verdict, verdict_color = "강한 매수", "#4ade80"
+    elif confidence >= 60 and buy_count >= 2: verdict, verdict_color = "매수", "#86efac"
+    elif confidence >= 45: verdict, verdict_color = "관망→매수준비", "#fbbf24"
+    elif confidence < 30: verdict, verdict_color = "관망/매도검토", "#f87171"
+    else: verdict, verdict_color = "관망", "#94a3b8"
 
     return {
-        "signals": signals,
-        "score": score,
-        "max_score": max_score,
-        "confidence": confidence,
-        "buy_count": buy_count,
-        "verdict": verdict,
-        "verdict_color": verdict_color,
-        "divs": divs,
+        "signals": signals, "score": score, "max_score": max_score,
+        "confidence": confidence, "buy_count": buy_count,
+        "verdict": verdict, "verdict_color": verdict_color, "divs": divs,
     }
 
 # ══════════════════════════════════════
@@ -461,37 +373,27 @@ def build_chart(df, ticker, show_fib=True, show_ichi=True):
         vertical_spacing=0.02,
         subplot_titles=["", "RSI + StochRSI", "MACD", ""]
     )
-    close = df["Close"].squeeze()
-    high  = df["High"].squeeze()
-    low   = df["Low"].squeeze()
+    close = df["Close"].squeeze(); high = df["High"].squeeze(); low = df["Low"].squeeze()
 
-    # 캔들
     fig.add_trace(go.Candlestick(
-        x=df.index, open=df["Open"].squeeze(), high=high, low=low, close=close,
-        name="주가",
+        x=df.index, open=df["Open"].squeeze(), high=high, low=low, close=close, name="주가",
         increasing_fillcolor="#4ade80", increasing_line_color="#4ade80",
         decreasing_fillcolor="#f87171", decreasing_line_color="#f87171",
     ), row=1, col=1)
 
-    # 이동평균
     for ma, color in [("MA5","#60a5fa"),("MA20","#fbbf24"),("MA60","#a78bfa"),("MA120","#fb923c")]:
         fig.add_trace(go.Scatter(x=df.index, y=df[ma].squeeze(), name=ma, line=dict(color=color, width=1.2)), row=1, col=1)
 
-    # 볼린저밴드
     fig.add_trace(go.Scatter(x=df.index, y=df["BB_upper"].squeeze(), line=dict(color="#94a3b8",width=0.7,dash="dot"), showlegend=False), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df["BB_lower"].squeeze(), line=dict(color="#94a3b8",width=0.7,dash="dot"), fill="tonexty", fillcolor="rgba(148,163,184,0.04)", showlegend=False), row=1, col=1)
 
-    # 일목균형표
     if show_ichi:
         fig.add_trace(go.Scatter(x=df.index, y=df["Tenkan"].squeeze(), name="전환선", line=dict(color="#f43f5e",width=1.0)), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df["Kijun"].squeeze(),  name="기준선", line=dict(color="#3b82f6",width=1.0)), row=1, col=1)
-        # 구름 (SenkouA, SenkouB)
         fig.add_trace(go.Scatter(x=df.index, y=df["SenkouA"].squeeze(), name="선행A", line=dict(color="#22c55e",width=0.5), showlegend=False), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df["SenkouB"].squeeze(), name="선행B", line=dict(color="#ef4444",width=0.5),
-                                 fill="tonexty", fillcolor="rgba(34,197,94,0.07)", showlegend=False), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df["SenkouB"].squeeze(), name="선행B", line=dict(color="#ef4444",width=0.5), fill="tonexty", fillcolor="rgba(34,197,94,0.07)", showlegend=False), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df["Chikou"].squeeze(), name="후행스팬", line=dict(color="#a78bfa",width=0.8,dash="dot")), row=1, col=1)
 
-    # 피보나치
     if show_fib:
         try:
             ret, ext, sh, sl = calc_fibonacci(df)
@@ -501,31 +403,22 @@ def build_chart(df, ticker, show_fib=True, show_ichi=True):
                               line_width=0.7, annotation_text=f" {label} {val:,.0f}",
                               annotation_position="right", annotation_font_size=9,
                               annotation_font_color=fib_colors.get(label,"#fff"), row=1, col=1)
-        except:
-            pass
+        except: pass
 
-    # RSI
     fig.add_trace(go.Scatter(x=df.index, y=df["RSI"].squeeze(), name="RSI", line=dict(color="#c084fc",width=1.5)), row=2, col=1)
-    # 스토캐스틱RSI
     fig.add_trace(go.Scatter(x=df.index, y=df["StochRSI_K"].squeeze(), name="StochK", line=dict(color="#38bdf8",width=1.0)), row=2, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df["StochRSI_D"].squeeze(), name="StochD", line=dict(color="#f472b6",width=1.0)), row=2, col=1)
     for lvl, clr in [(70,"#f87171"),(50,"#475569"),(30,"#4ade80")]:
         fig.add_hline(y=lvl, line_dash="dot", line_color=clr, line_width=0.7, row=2, col=1)
 
-    # MACD
     hist_vals  = df["MACD_hist"].squeeze().fillna(0).tolist()
     bar_colors = ["#4ade80" if v>=0 else "#f87171" for v in hist_vals]
     fig.add_trace(go.Bar(x=df.index, y=df["MACD_hist"].squeeze(), name="MACD Hist", marker_color=bar_colors, opacity=0.8), row=3, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df["MACD"].squeeze(), name="MACD", line=dict(color="#60a5fa",width=1.2)), row=3, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df["MACD_signal"].squeeze(), name="Signal", line=dict(color="#fbbf24",width=1.2)), row=3, col=1)
 
-    # 거래량
-    vol_vals = df["Volume"].squeeze().tolist()
-    close_vals = df["Close"].squeeze().tolist()
-    vol_colors = []
-    for i, (v,c) in enumerate(zip(vol_vals, close_vals)):
-        if i==0: vol_colors.append("#94a3b8")
-        else: vol_colors.append("#4ade80" if c >= close_vals[i-1] else "#f87171")
+    vol_vals = df["Volume"].squeeze().tolist(); close_vals = df["Close"].squeeze().tolist()
+    vol_colors = ["#94a3b8"] + ["#4ade80" if close_vals[i] >= close_vals[i-1] else "#f87171" for i in range(1, len(close_vals))]
     fig.add_trace(go.Bar(x=df.index, y=df["Volume"].squeeze(), name="거래량", marker_color=vol_colors, opacity=0.7), row=4, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df["Vol_MA20"].squeeze(), name="Vol MA20", line=dict(color="#fbbf24",width=1.0)), row=4, col=1)
 
@@ -535,16 +428,9 @@ def build_chart(df, ticker, show_fib=True, show_ichi=True):
         xaxis_rangeslider_visible=False, height=760,
         margin=dict(l=0, r=110, t=20, b=0),
         legend=dict(bgcolor="#111318", bordercolor="#1e2130", borderwidth=1, orientation="h", x=0, y=1.01, font=dict(size=9)),
-        
-        # 통합 툴팁(십자선) 설정
         hovermode="x unified",
-        hoverlabel=dict(
-            bgcolor="#151820",
-            font_size=12,
-            font_family="DM Mono"
-        )
+        hoverlabel=dict(bgcolor="#151820", font_size=12, font_family="DM Mono")
     )
-    
     for row in [1,2,3,4]:
         fig.update_xaxes(gridcolor="#1a1e2a", row=row, col=1)
         fig.update_yaxes(gridcolor="#1a1e2a", row=row, col=1)
@@ -626,9 +512,6 @@ ATR: {ind['atr']:,.0f} | 거래량: 평균 대비 {vr:.1f}배
    - 이 분석이 틀릴 수 있는 조건 (파동 무효화 레벨)
 """
 
-# ══════════════════════════════════════
-# 스크리닝
-# ══════════════════════════════════════
 def score_stock(name, ticker):
     try:
         df = get_stock_data(ticker, "6mo")
@@ -657,32 +540,17 @@ def score_stock(name, ticker):
 def build_screening_chart(r):
     df = r["df"]
     close = df["Close"].squeeze()
-    try:
-        ret, ext, sh, sl = calc_fibonacci(df)
-    except:
-        ret, ext = {}, {}
+    try: ret, ext, sh, sl = calc_fibonacci(df)
+    except: ret, ext = {}, {}
     fig = go.Figure()
-    fig.add_trace(go.Candlestick(x=df.index, open=df["Open"].squeeze(), high=df["High"].squeeze(),
-                                  low=df["Low"].squeeze(), close=close, name=r["name"],
-                                  increasing_fillcolor="#4ade80", increasing_line_color="#4ade80",
-                                  decreasing_fillcolor="#f87171", decreasing_line_color="#f87171"))
-    for span,color,label in [(20,"#fbbf24","MA20"),(60,"#a78bfa","MA60")]:
-        fig.add_trace(go.Scatter(x=df.index, y=close.rolling(span).mean(), name=label, line=dict(color=color,width=1.2)))
-    # 일목 전환/기준선
+    fig.add_trace(go.Candlestick(x=df.index, open=df["Open"].squeeze(), high=df["High"].squeeze(), low=df["Low"].squeeze(), close=close, name=r["name"], increasing_fillcolor="#4ade80", increasing_line_color="#4ade80", decreasing_fillcolor="#f87171", decreasing_line_color="#f87171"))
+    for span,color,label in [(20,"#fbbf24","MA20"),(60,"#a78bfa","MA60")]: fig.add_trace(go.Scatter(x=df.index, y=close.rolling(span).mean(), name=label, line=dict(color=color,width=1.2)))
     fig.add_trace(go.Scatter(x=df.index, y=df["Tenkan"].squeeze(), name="전환선", line=dict(color="#f43f5e",width=1.0)))
     fig.add_trace(go.Scatter(x=df.index, y=df["Kijun"].squeeze(), name="기준선", line=dict(color="#3b82f6",width=1.0)))
-    # 피보 61.8%
-    if "61.8%" in ret:
-        fig.add_hline(y=ret["61.8%"], line_dash="dot", line_color="#4ade80", line_width=0.8,
-                      annotation_text=f" Fib 61.8% {ret['61.8%']:,.0f}", annotation_font_color="#4ade80", annotation_font_size=9)
-    fig.add_hline(y=r["target_buy"],  line_color="#4ade80", line_width=2, line_dash="dash",
-                  annotation_text=f"  매수가 {r['target_buy']:,.0f}", annotation_position="right", annotation_font_color="#4ade80")
-    fig.add_hline(y=r["target_sell"], line_color="#f87171", line_width=2, line_dash="dash",
-                  annotation_text=f"  목표가 {r['target_sell']:,.0f}", annotation_position="right", annotation_font_color="#f87171")
-    fig.update_layout(paper_bgcolor="#0d0f14", plot_bgcolor="#0d0f14",
-                      font=dict(color="#5a6070",size=10), xaxis_rangeslider_visible=False,
-                      height=380, margin=dict(l=0,r=130,t=10,b=0),
-                      legend=dict(bgcolor="#111318",bordercolor="#1e2130",borderwidth=1,orientation="h",x=0,y=1.08,font=dict(size=9)))
+    if "61.8%" in ret: fig.add_hline(y=ret["61.8%"], line_dash="dot", line_color="#4ade80", line_width=0.8, annotation_text=f" Fib 61.8% {ret['61.8%']:,.0f}", annotation_font_color="#4ade80", annotation_font_size=9)
+    fig.add_hline(y=r["target_buy"],  line_color="#4ade80", line_width=2, line_dash="dash", annotation_text=f"  매수가 {r['target_buy']:,.0f}", annotation_position="right", annotation_font_color="#4ade80")
+    fig.add_hline(y=r["target_sell"], line_color="#f87171", line_width=2, line_dash="dash", annotation_text=f"  목표가 {r['target_sell']:,.0f}", annotation_position="right", annotation_font_color="#f87171")
+    fig.update_layout(paper_bgcolor="#0d0f14", plot_bgcolor="#0d0f14", font=dict(color="#5a6070",size=10), xaxis_rangeslider_visible=False, height=380, margin=dict(l=0,r=130,t=10,b=0), legend=dict(bgcolor="#111318",bordercolor="#1e2130",borderwidth=1,orientation="h",x=0,y=1.08,font=dict(size=9)))
     fig.update_xaxes(gridcolor="#1a1e2a"); fig.update_yaxes(gridcolor="#1a1e2a")
     return fig
 
@@ -699,6 +567,10 @@ if "screen_result" not in st.session_state:
 # ══════════════════════════════════════
 with st.sidebar:
     st.markdown("## 📈 차트 분석기")
+    
+    # ⭐ 여기에 데이터 갱신 시간을 표시할 '빈 공간(Placeholder)'을 미리 만들어 둡니다.
+    refresh_placeholder = st.empty() 
+    
     st.markdown("---")
     ticker_input = st.text_input("종목 코드", value="005930.KS", help="삼성전자, HPSP, 애플 등 이름도 가능")
     timeframe_map = {
@@ -810,10 +682,29 @@ if st.session_state.mode == "home":
             close = df["Close"].squeeze().dropna()
             if len(close) < 2: continue
             stock_perf[s] = float((close.iloc[-1]/close.iloc[0]-1)*100)
-        return indices, fund_flow, sector_data, stock_perf
+            
+        # ⭐ 데이터를 전부 수집한 시점의 '현재 시간(KST)'을 추가로 반환합니다.
+        fetch_time = datetime.now(KST)
+        return indices, fund_flow, sector_data, stock_perf, fetch_time
 
     with st.spinner("🌐 글로벌 시장 데이터 수집 중... (최초 30초, 이후 5분 캐시)"):
-        indices, fund_flow, sector_data, stock_perf = get_all_home_data()
+        indices, fund_flow, sector_data, stock_perf, fetch_time = get_all_home_data()
+
+    # ⭐ 사이드바에 만들어둔 빈 공간에 업데이트 시간을 렌더링합니다. (다음 업데이트 = 현재 + 5분)
+    next_update = fetch_time + timedelta(seconds=300)
+    refresh_placeholder.markdown(f"""
+    <div style='background:#1a1e2a; border:1px solid #2a3040; border-radius:8px; padding:12px; margin-top:-10px; margin-bottom:12px;'>
+        <div style='font-size:11px; color:#94a3b8; margin-bottom:6px;'>🔄 글로벌 시장 데이터 갱신 (5분)</div>
+        <div style='font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between; margin-bottom:4px;'>
+            <span>마지막 업데이트</span>
+            <b style='color:#4ade80; font-family:DM Mono,monospace;'>{fetch_time.strftime('%H:%M:%S')}</b>
+        </div>
+        <div style='font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between;'>
+            <span>다음 업데이트</span>
+            <b style='color:#fbbf24; font-family:DM Mono,monospace;'>{next_update.strftime('%H:%M:%S')}</b>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # 1. 글로벌 투자자금 흐름
     st.markdown("## 💰 글로벌 투자자금 흐름")
