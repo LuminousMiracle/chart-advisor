@@ -433,75 +433,296 @@ with st.sidebar:
 # 홈
 # ══════════════════════════════════════
 if st.session_state.mode == "home":
-    st.markdown("### 📊 실시간 시장 현황")
-    st.caption("yfinance 기준 · 5분 캐시")
 
+    # ── 데이터 수집 함수들
     @st.cache_data(ttl=300)
-    def get_market_data():
-        tickers = {
-            "코스피": "^KS11", "코스닥": "^KQ11",
-            "나스닥": "^IXIC", "달러/원": "KRW=X", "VIX": "^VIX",
+    def get_all_home_data():
+        # 1. 글로벌 주요 지수 + 안전자산
+        index_tickers = {
+            "코스피":"^KS11","코스닥":"^KQ11","나스닥":"^IXIC",
+            "S&P500":"^GSPC","달러/원":"KRW=X","VIX":"^VIX",
+            "금":"GC=F","원유":"CL=F",
         }
-        result = {}
-        for name, ticker in tickers.items():
+        # 2. 글로벌 투자자금 대용 (대형 ETF 거래대금 추세)
+        fund_tickers = {
+            "SPY(미국전체)":"SPY","QQQ(나스닥100)":"QQQ",
+            "EEM(신흥국)":"EEM","IEF(미국채10Y)":"IEF",
+        }
+        # 3. 미국 섹터 ETF 11개
+        sector_tickers = {
+            "기술(XLK)":"XLK","헬스케어(XLV)":"XLV","금융(XLF)":"XLF",
+            "에너지(XLE)":"XLE","산업재(XLI)":"XLI","소비재(XLY)":"XLY",
+            "필수소비재(XLP)":"XLP","유틸리티(XLU)":"XLU","부동산(XLRE)":"XLRE",
+            "소재(XLB)":"XLB","통신(XLC)":"XLC",
+        }
+        # 섹터별 대표 종목 (선두 + 다크호스)
+        sector_stocks = {
+            "XLK": {"leader":["NVDA","MSFT","AAPL"], "dark":["PLTR","ARM","SMCI"]},
+            "XLV": {"leader":["LLY","UNH","JNJ"],    "dark":["RXRX","TVTX","NUVL"]},
+            "XLF": {"leader":["BRK-B","JPM","V"],    "dark":["HOOD","SOFI","AFRM"]},
+            "XLE": {"leader":["XOM","CVX","SLB"],    "dark":["SM","CIVI","MGY"]},
+            "XLI": {"leader":["GE","CAT","HON"],     "dark":["KTOS","HII","DRS"]},
+            "XLY": {"leader":["AMZN","TSLA","MCD"],  "dark":["RIVN","LCID","NKLA"]},
+            "XLP": {"leader":["WMT","PG","KO"],      "dark":["COTY","SFM","GO"]},
+            "XLU": {"leader":["NEE","DUK","SO"],     "dark":["VST","NRG","AES"]},
+            "XLRE":{"leader":["PLD","AMT","EQIX"],   "dark":["IIPR","COLD","REXR"]},
+            "XLB": {"leader":["LIN","APD","SHW"],    "dark":["MP","ALTM","CTRA"]},
+            "XLC": {"leader":["META","GOOGL","DIS"],  "dark":["RDDT","SNAP","PINS"]},
+        }
+
+        def fetch(ticker, period="1mo"):
             try:
-                df = yf.download(ticker, period="5d", auto_adjust=True, progress=False)
-                if df is None or df.empty: continue
+                df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+                if df is None or df.empty: return None
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.get_level_values(0)
-                close = df["Close"].squeeze().dropna()
-                cur  = float(close.iloc[-1])
-                prev = float(close.iloc[-2])
-                chg  = (cur/prev-1)*100
-                result[name] = {"cur": cur, "chg": chg}
-            except:
-                pass
-        return result
+                return df.dropna(how="all")
+            except: return None
 
-    with st.spinner("시장 데이터 불러오는 중..."):
-        mkt = get_market_data()
+        # 지수 데이터
+        indices = {}
+        for name, t in index_tickers.items():
+            df = fetch(t, "5d")
+            if df is None: continue
+            close = df["Close"].squeeze().dropna()
+            if len(close) < 2: continue
+            cur  = float(close.iloc[-1])
+            prev = float(close.iloc[-2])
+            indices[name] = {"cur":cur, "chg":(cur/prev-1)*100, "ticker":t}
 
-    if mkt:
-        cols = st.columns(len(mkt))
-        icons = {"코스피":"🇰🇷","코스닥":"📊","나스닥":"🇺🇸","달러/원":"💵","VIX":"😨"}
-        for col, (name, data) in zip(cols, mkt.items()):
+        # 글로벌 자금 흐름 (ETF 거래대금 = 가격×거래량 추세)
+        fund_flow = {}
+        for name, t in fund_tickers.items():
+            df = fetch(t, "1mo")
+            if df is None: continue
+            close = df["Close"].squeeze().dropna()
+            vol   = df["Volume"].squeeze().dropna()
+            # 거래대금 (억달러)
+            turnover = (close * vol / 1e8).dropna()
+            if len(turnover) < 10: continue
+            recent_avg = float(turnover.iloc[-5:].mean())
+            prev_avg   = float(turnover.iloc[-15:-5].mean())
+            chg_pct    = (recent_avg/prev_avg-1)*100 if prev_avg else 0
+            price_chg  = float((close.iloc[-1]/close.iloc[0]-1)*100)
+            fund_flow[name] = {
+                "recent_vol": recent_avg,
+                "vol_chg": chg_pct,
+                "price_chg": price_chg,
+            }
+
+        # 섹터 수익률 + 거래대금 (1주, 1개월)
+        sector_data = {}
+        for name, t in sector_tickers.items():
+            df1w = fetch(t, "5d")
+            df1m = fetch(t, "1mo")
+            if df1w is None or df1m is None: continue
+            c1w  = df1w["Close"].squeeze().dropna()
+            c1m  = df1m["Close"].squeeze().dropna()
+            v1w  = df1w["Volume"].squeeze().dropna()
+            if len(c1w)<2 or len(c1m)<2: continue
+            ret1w = float((c1w.iloc[-1]/c1w.iloc[0]-1)*100)
+            ret1m = float((c1m.iloc[-1]/c1m.iloc[0]-1)*100)
+            # 거래대금 증가율
+            vol_recent = float((c1w["Close"] * v1w).iloc[-3:].mean()) if hasattr(c1w, "name") else float((df1w["Close"].squeeze() * df1w["Volume"].squeeze()).iloc[-3:].mean())
+            sector_data[name] = {
+                "ticker": t,
+                "ret1w": ret1w,
+                "ret1m": ret1m,
+                "stocks": sector_stocks.get(t, {}),
+            }
+
+        # 섹터 종목 수익률 (다크호스 확인용)
+        stock_perf = {}
+        all_stocks = set()
+        for v in sector_stocks.values():
+            all_stocks.update(v.get("leader",[]))
+            all_stocks.update(v.get("dark",[]))
+        for s in list(all_stocks)[:30]:  # 너무 많으면 느리니 30개 제한
+            df = fetch(s, "1mo")
+            if df is None: continue
+            close = df["Close"].squeeze().dropna()
+            if len(close) < 2: continue
+            stock_perf[s] = float((close.iloc[-1]/close.iloc[0]-1)*100)
+
+        return indices, fund_flow, sector_data, stock_perf
+
+    with st.spinner("🌐 글로벌 시장 데이터 수집 중... (최초 30초, 이후 5분 캐시)"):
+        indices, fund_flow, sector_data, stock_perf = get_all_home_data()
+
+    # ══ 섹션 1: 글로벌 지수 현황 ══
+    st.markdown("## 🌍 글로벌 시장 현황")
+    st.caption("yfinance 기준 · 5분 자동 갱신")
+
+    icons = {"코스피":"🇰🇷","코스닥":"📊","나스닥":"🇺🇸","S&P500":"🗽","달러/원":"💵","VIX":"😨","금":"🥇","원유":"🛢️"}
+    if indices:
+        cols = st.columns(len(indices))
+        for col, (name, data) in zip(cols, indices.items()):
             chg   = data["chg"]
             color = "#4ade80" if chg >= 0 else "#f87171"
             sign  = "▲" if chg >= 0 else "▼"
-            val_str = f"{data['cur']:,.2f}"
             col.markdown(f"""
-<div style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:18px 16px;text-align:center;'>
-  <div style='font-size:22px;margin-bottom:4px;'>{icons.get(name,"📈")}</div>
-  <div style='font-size:11px;color:#4a5060;letter-spacing:0.1em;margin-bottom:6px;'>{name}</div>
-  <div style='font-size:20px;font-weight:700;color:#f0f2f8;font-family:DM Mono,monospace;'>{val_str}</div>
-  <div style='font-size:13px;color:{color};margin-top:4px;font-weight:600;'>{sign} {abs(chg):.2f}%</div>
+<div style='background:#151820;border:1px solid #1e2130;border-radius:10px;padding:14px 10px;text-align:center;'>
+  <div style='font-size:18px;'>{icons.get(name,"📈")}</div>
+  <div style='font-size:10px;color:#4a5060;margin:4px 0;'>{name}</div>
+  <div style='font-size:16px;font-weight:700;color:#f0f2f8;font-family:DM Mono,monospace;'>{data["cur"]:,.1f}</div>
+  <div style='font-size:12px;color:{color};font-weight:600;'>{sign}{abs(chg):.2f}%</div>
 </div>""", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # VIX 기반 공포탐욕 + 시장 해석
+    if indices:
+        vix = indices.get("VIX",{}).get("cur", 20)
+        usd_chg = indices.get("달러/원",{}).get("chg", 0)
+        nasdaq_chg = indices.get("나스닥",{}).get("chg", 0)
+        gold_chg = indices.get("금",{}).get("chg", 0)
 
-    if mkt:
-        vix        = mkt.get("VIX",{}).get("cur", 20)
-        usd_chg    = mkt.get("달러/원",{}).get("chg", 0)
-        nasdaq_chg = mkt.get("나스닥",{}).get("chg", 0)
-        kospi_chg  = mkt.get("코스피",{}).get("chg", 0)
-        comments = []
-        if vix >= 30:   comments.append("😨 **VIX 30+** — 공포 구간, 변동성 주의. 역설적으로 매수 기회일 수 있음")
-        elif vix <= 15: comments.append("😊 **VIX 15-** — 시장 안정, 투자 심리 양호")
-        else:           comments.append(f"😐 **VIX {vix:.1f}** — 보통 수준 변동성")
-        if usd_chg > 0.5:   comments.append("💵 **원화 약세** — 외국인 매도 압력 가능, 수출주 유리")
-        elif usd_chg < -0.5: comments.append("💵 **원화 강세** — 외국인 유입 기대, 내수주 유리")
-        if nasdaq_chg > 1:   comments.append("🇺🇸 **나스닥 강세** — 다음 거래일 코스피 상승 기대")
-        elif nasdaq_chg < -1: comments.append("🇺🇸 **나스닥 약세** — 다음 거래일 코스피 하락 주의")
+        # 공포탐욕 점수 (0~100)
+        fg_score = max(0, min(100, int(100 - (vix - 10) * 2.5)))
+        if fg_score >= 75:   fg_label, fg_color = "극도의 탐욕 😍", "#4ade80"
+        elif fg_score >= 55: fg_label, fg_color = "탐욕 😊", "#86efac"
+        elif fg_score >= 45: fg_label, fg_color = "중립 😐", "#fbbf24"
+        elif fg_score >= 25: fg_label, fg_color = "공포 😨", "#fb923c"
+        else:                fg_label, fg_color = "극도의 공포 😱", "#f87171"
 
-        st.markdown("#### 💬 시장 해석")
-        for c in comments:
-            st.markdown(f"• {c}")
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown(f"""
+<div style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:20px;text-align:center;'>
+  <div style='font-size:12px;color:#4a5060;margin-bottom:8px;letter-spacing:0.1em;'>공포 & 탐욕 지수</div>
+  <div style='font-size:48px;font-weight:800;color:{fg_color};font-family:DM Mono,monospace;'>{fg_score}</div>
+  <div style='font-size:14px;color:{fg_color};margin-top:4px;font-weight:600;'>{fg_label}</div>
+  <div style='font-size:10px;color:#3a4050;margin-top:8px;'>VIX {vix:.1f} 기반</div>
+</div>""", unsafe_allow_html=True)
+        with col2:
+            comments = []
+            if gold_chg > 0.5 and usd_chg > 0.3:
+                comments.append("🔴 **안전자산 동반 강세** — 위험 회피 심리, 주식 비중 축소 고려")
+            elif gold_chg < -0.3 and nasdaq_chg > 0.5:
+                comments.append("🟢 **위험자산 선호** — 금 약세 + 나스닥 강세, 성장주 유리")
+            if usd_chg > 0.5:
+                comments.append("💵 **원화 약세** → 외국인 매도 압력, 수출 대형주 주목")
+            elif usd_chg < -0.5:
+                comments.append("💵 **원화 강세** → 외국인 유입 기대, 내수·IT 주목")
+            if nasdaq_chg > 1:
+                comments.append("🇺🇸 **나스닥 강세** → 다음 거래일 코스닥 상승 기대")
+            elif nasdaq_chg < -1:
+                comments.append("🇺🇸 **나스닥 약세** → 다음 거래일 코스닥 하락 주의")
+            if not comments:
+                comments.append("😐 특별한 시그널 없음 — 관망 유지")
+            st.markdown("**💬 시장 해석**")
+            for c in comments:
+                st.markdown(f"• {c}")
+
+    st.markdown("---")
+
+    # ══ 섹션 2: 글로벌 투자자금 흐름 ══
+    st.markdown("## 💰 글로벌 투자자금 흐름")
+    st.caption("주요 ETF 거래대금 추세로 자금 증감 추정 (최근 5일 vs 이전 10일 평균)")
+
+    if fund_flow:
+        cols = st.columns(len(fund_flow))
+        for col, (name, data) in zip(cols, fund_flow.items()):
+            vol_chg   = data["vol_chg"]
+            price_chg = data["price_chg"]
+            v_color = "#4ade80" if vol_chg > 0 else "#f87171"
+            p_color = "#4ade80" if price_chg > 0 else "#f87171"
+            v_sign  = "▲" if vol_chg > 0 else "▼"
+            p_sign  = "▲" if price_chg > 0 else "▼"
+            # 자금 상태 판단
+            if vol_chg > 5 and price_chg > 0:
+                status, s_color = "자금 유입 ↑", "#4ade80"
+            elif vol_chg < -5 and price_chg < 0:
+                status, s_color = "자금 유출 ↓", "#f87171"
+            elif vol_chg > 5 and price_chg < 0:
+                status, s_color = "매도 급증 ⚠", "#fb923c"
+            else:
+                status, s_color = "보합", "#94a3b8"
+            col.markdown(f"""
+<div style='background:#151820;border:1px solid #1e2130;border-radius:10px;padding:14px 12px;'>
+  <div style='font-size:11px;color:#4a5060;margin-bottom:6px;'>{name}</div>
+  <div style='font-size:13px;font-weight:700;color:{s_color};margin-bottom:8px;'>{status}</div>
+  <div style='font-size:11px;color:#5a6070;'>거래대금 {v_sign}<span style='color:{v_color};'>{abs(vol_chg):.1f}%</span></div>
+  <div style='font-size:11px;color:#5a6070;'>수익률 {p_sign}<span style='color:{p_color};'>{abs(price_chg):.1f}%</span></div>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # ══ 섹션 3: 돈이 몰리는 섹터 Top5 ══
+    st.markdown("## 🏭 자금이 몰리는 섹터 Top 5")
+    st.caption("미국 섹터 ETF 1주 수익률 기준 · 순위 변동 표시")
+
+    if sector_data:
+        # 1주 수익률 기준 정렬
+        sorted_sectors = sorted(sector_data.items(), key=lambda x: x[1]["ret1w"], reverse=True)
+        top5 = sorted_sectors[:5]
+        worst1 = sorted_sectors[-1]
+        max_ret = max(abs(v["ret1w"]) for _, v in sorted_sectors) or 1
+
+        for rank, (name, data) in enumerate(top5, 1):
+            ret1w = data["ret1w"]
+            ret1m = data["ret1m"]
+            bar_w = int(abs(ret1w) / max_ret * 100)
+            bar_color = "#4ade80" if ret1w > 0 else "#f87171"
+            # 1주 vs 1개월 순위 비교로 모멘텀 파악
+            rank1m_list = sorted(sector_data.items(), key=lambda x: x[1]["ret1m"], reverse=True)
+            rank1m = next((i+1 for i, (n,_) in enumerate(rank1m_list) if n==name), 0)
+            rank_diff = rank1m - rank  # 양수 = 최근 상승, 음수 = 최근 하락
+            if rank_diff > 2:   momentum, m_color = f"🚀 급상승 +{rank_diff}계단", "#4ade80"
+            elif rank_diff > 0: momentum, m_color = f"↗ 상승 +{rank_diff}계단", "#86efac"
+            elif rank_diff == 0: momentum, m_color = "→ 유지", "#94a3b8"
+            elif rank_diff > -3: momentum, m_color = f"↘ 하락 {rank_diff}계단", "#fb923c"
+            else:               momentum, m_color = f"📉 급락 {rank_diff}계단", "#f87171"
+
+            rank_emoji = ["🥇","🥈","🥉","4️⃣","5️⃣"][rank-1]
+
+            # 섹터 내 종목
+            stocks_info = data.get("stocks", {})
+            leaders  = stocks_info.get("leader", [])
+            darks    = stocks_info.get("dark", [])
+
+            def stock_badge(ticker, is_dark=False):
+                perf = stock_perf.get(ticker, 0)
+                color = "#4ade80" if perf > 0 else "#f87171"
+                sign  = "▲" if perf > 0 else "▼"
+                border = "#fbbf24" if is_dark else "#1e2130"
+                return f"<span style='background:#151820;border:1px solid {border};border-radius:6px;padding:3px 8px;font-size:11px;color:{color};margin-right:4px;'>{ticker} {sign}{abs(perf):.1f}%</span>"
+
+            leader_badges = "".join([stock_badge(s) for s in leaders])
+            dark_badges   = "".join([stock_badge(s, True) for s in darks])
+
+            st.markdown(f"""
+<div style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:16px 20px;margin-bottom:10px;'>
+  <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>
+    <div>
+      <span style='font-size:16px;'>{rank_emoji}</span>
+      <span style='font-size:15px;font-weight:700;color:#f0f2f8;margin-left:8px;'>{name}</span>
+      <span style='font-size:12px;color:{m_color};margin-left:12px;'>{momentum}</span>
+    </div>
+    <div style='text-align:right;'>
+      <span style='font-size:14px;font-weight:700;color:{bar_color};font-family:DM Mono,monospace;'>{"▲" if ret1w>0 else "▼"}{abs(ret1w):.2f}%</span>
+      <span style='font-size:11px;color:#4a5060;margin-left:8px;'>1주 / 1개월 {"▲" if ret1m>0 else "▼"}{abs(ret1m):.1f}%</span>
+    </div>
+  </div>
+  <div style='background:#1a1e2a;border-radius:4px;height:6px;margin-bottom:12px;'>
+    <div style='background:{bar_color};height:6px;border-radius:4px;width:{bar_w}%;'></div>
+  </div>
+  <div style='margin-bottom:6px;'>
+    <span style='font-size:10px;color:#4a5060;margin-right:8px;'>👑 선두</span>{leader_badges}
+  </div>
+  <div>
+    <span style='font-size:10px;color:#fbbf24;margin-right:8px;'>⚡ 다크호스</span>{dark_badges}
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        # 꼴찌 섹터 (자금 이탈)
+        name_w, data_w = worst1
+        ret_w = data_w["ret1w"]
+        st.markdown(f"<div style='background:#1a0d0d;border:1px solid #4a1a1a;border-radius:10px;padding:12px 16px;font-size:12px;color:#f87171;'>📉 자금 이탈 섹터: <b>{name_w}</b> — {ret_w:.2f}% (1주)</div>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown("""
-<div style='text-align:center;color:#2a3040;font-size:13px;padding:16px 0;'>
-엘리어트 파동 중심 기술적 분석 플랫폼<br>
-사이드바에서 <b style='color:#4ade80;'>종목 분석</b> 또는 <b style='color:#4ade80;'>Top5 추천</b>을 선택하세요
+<div style='text-align:center;color:#2a3040;font-size:13px;padding:12px 0;'>
+엘리어트 파동 중심 기술적 분석 플랫폼 · 사이드바에서 <b style='color:#4ade80;'>종목 분석</b> 또는 <b style='color:#4ade80;'>Top5 추천</b> 선택
 </div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════
