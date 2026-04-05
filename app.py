@@ -57,9 +57,9 @@ def search_ticker(query):
 # ══════════════════════════════════════
 # 데이터 수집
 # ══════════════════════════════════════
-def get_stock_data(ticker, period):
+def get_stock_data(ticker, period, interval='1d'):
     try:
-        raw = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+        raw = yf.download(ticker, period=period, interval=interval, auto_adjust=True, progress=False)
         if raw is None or raw.empty: return None
         if isinstance(raw.columns, pd.MultiIndex):
             raw.columns = raw.columns.get_level_values(0)
@@ -659,9 +659,16 @@ with st.sidebar:
     st.markdown("## 📈 차트 분석기")
     st.markdown("---")
     ticker_input = st.text_input("종목 코드", value="005930.KS", help="삼성전자, HPSP, 애플 등 이름도 가능")
-    period_map   = {"3개월":"3mo","6개월":"6mo","1년":"1y","2년":"2y"}
-    period_label = st.selectbox("분석 기간", list(period_map.keys()), index=1)
-    period       = period_map[period_label]
+    timeframe_map = {
+        "일봉": {"period":"6mo",  "interval":"1d",  "label":"일봉 (6개월)"},
+        "주봉": {"period":"2y",   "interval":"1wk", "label":"주봉 (2년)"},
+        "월봉": {"period":"5y",   "interval":"1mo", "label":"월봉 (5년)"},
+        "연봉": {"period":"max",  "interval":"3mo", "label":"연봉 (전체)"},
+    }
+    period_label = st.selectbox("차트 봉", list(timeframe_map.keys()), index=0)
+    tf           = timeframe_map[period_label]
+    period       = tf["period"]
+    interval     = tf["interval"]
     show_fib  = st.toggle("피보나치 레벨", value=True)
     show_ichi = st.toggle("일목균형표",   value=True)
     api_key   = st.text_input("Groq API Key", type="password", placeholder="gsk_...", help="console.groq.com 무료 발급")
@@ -874,7 +881,7 @@ if st.session_state.mode == "home":
 elif st.session_state.mode == "analyze":
     ticker = search_ticker(ticker_input)
     with st.spinner(f"{ticker} 일봉+주봉 데이터 수집 중..."):
-        df_d = get_stock_data(ticker, period)
+        df_d = get_stock_data(ticker, period, interval)
         df_w = get_weekly_data(ticker)
 
     if df_d is None or len(df_d) < 30:
