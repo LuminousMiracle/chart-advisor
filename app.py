@@ -1009,8 +1009,6 @@ elif st.session_state.mode == "screen":
         """, unsafe_allow_html=True)
 
     if st.session_state.screen_result is None:
-    # ⬆️ 여기까지 덮어씌워 주세요 ⬆️
-    if st.session_state.screen_result is None:
         total=len(KR_UNIVERSE); prog_bar=st.progress(0); status=st.empty(); results=[]
         for i,(name,ticker) in enumerate(KR_UNIVERSE.items()):
             prog_bar.progress((i+1)/total)
