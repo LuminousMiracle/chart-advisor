@@ -26,9 +26,31 @@ html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 ::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #4a5060; }
 
-/* 버튼 스타일 */
-div.stButton > button { background: #4ade80; color: #0d1a0f; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; padding: 10px 24px; width: 100%; margin-bottom: 8px; transition: all 0.2s ease; }
-div.stButton > button:hover { background: #22c55e; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2); }
+/* 사이드바 네비게이션 탭 (미니멀 & 네온 호버 스타일) */
+div.stButton > button { 
+    background-color: #151820; /* 사이드바 배경에 녹아드는 차분한 톤 */
+    color: #94a3b8; /* 눈이 편안한 은회색 텍스트 */
+    border: 1px solid #1e2130; /* 튀지 않는 얇고 어두운 테두리 */
+    border-radius: 8px; 
+    font-weight: 500; 
+    font-size: 15px; 
+    padding: 12px 24px; 
+    width: 100%; 
+    margin-bottom: 8px; 
+    transition: all 0.3s ease; 
+}
+div.stButton > button:hover { 
+    background-color: rgba(74, 222, 128, 0.05); /* 마우스를 올리면 스며드는 은은한 네온 그린 */
+    border-color: #4ade80; /* 테두리가 네온으로 점등 */
+    color: #4ade80; /* 글씨가 네온으로 점등 */
+    transform: translateY(-2px); 
+    box-shadow: 0 4px 15px rgba(74, 222, 128, 0.15); /* 부드러운 빛 번짐 효과 */
+}
+div.stButton > button:active {
+    transform: translateY(0px); /* 클릭 시 묵직하게 눌리는 느낌 */
+    border-color: #22c55e;
+    color: #22c55e;
+}
 
 /* AI 분석 박스 글로우 효과 */
 .analysis-box { 
