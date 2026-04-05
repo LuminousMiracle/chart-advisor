@@ -690,11 +690,17 @@ if st.session_state.mode == "home":
     with st.spinner("🌐 글로벌 시장 데이터 수집 중... (최초 30초, 이후 5분 캐시)"):
         indices, fund_flow, sector_data, stock_perf, fetch_time = get_all_home_data()
 
-    # ⭐ 사이드바에 만들어둔 빈 공간에 업데이트 시간을 렌더링합니다. (다음 업데이트 = 현재 + 5분)
+   # ⭐ 사이드바에 만들어둔 빈 공간에 업데이트 시간을 렌더링합니다. (다음 업데이트 = 현재 + 5분)
+    current_time = datetime.now(KST)
     next_update = fetch_time + timedelta(seconds=300)
+    
     refresh_placeholder.markdown(f"""
     <div style='background:#1a1e2a; border:1px solid #2a3040; border-radius:8px; padding:12px; margin-top:-10px; margin-bottom:12px;'>
-        <div style='font-size:11px; color:#94a3b8; margin-bottom:6px;'>🔄 글로벌 시장 데이터 갱신 (5분)</div>
+        <div style='font-size:11px; color:#94a3b8; margin-bottom:8px;'>🕒 시간 정보 & 데이터 갱신 (5분)</div>
+        <div style='font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between; margin-bottom:4px;'>
+            <span>현재 시간</span>
+            <b style='color:#60a5fa; font-family:DM Mono,monospace;'>{current_time.strftime('%H:%M:%S')}</b>
+        </div>
         <div style='font-size:12px; color:#f0f2f8; display:flex; justify-content:space-between; margin-bottom:4px;'>
             <span>마지막 업데이트</span>
             <b style='color:#4ade80; font-family:DM Mono,monospace;'>{fetch_time.strftime('%H:%M:%S')}</b>
