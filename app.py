@@ -20,39 +20,60 @@ html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 .stApp { background-color: #0d0f14; }
 [data-testid="stSidebar"] { background-color: #111318; border-right: 1px solid #1e2130; }
 
-/* 스크롤바 커스텀 */
+/* ⬇️ 스크롤바 커스텀 (다크모드 몰입감 100%) */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: #0d0f14; }
 ::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #4a5060; }
 
-/* 사이드바 네비게이션 탭 (미니멀 & 네온 호버 스타일) */
+/* ⬇️ 1. 사이드바 네비게이션 탭 (메뉴 간격 축소 및 높이 조정) */
+div.stButton { margin-bottom: -10px !important; }
 div.stButton > button { 
-    background-color: #151820; /* 사이드바 배경에 녹아드는 차분한 톤 */
-    color: #94a3b8; /* 눈이 편안한 은회색 텍스트 */
-    border: 1px solid #1e2130; /* 튀지 않는 얇고 어두운 테두리 */
+    background-color: #151820; 
+    color: #94a3b8; 
+    border: 1px solid #1e2130; 
     border-radius: 8px; 
     font-weight: 500; 
     font-size: 15px; 
-    padding: 12px 24px; 
+    padding: 10px 24px; 
     width: 100%; 
-    margin-bottom: 8px; 
     transition: all 0.3s ease; 
 }
 div.stButton > button:hover { 
-    background-color: rgba(74, 222, 128, 0.05); /* 마우스를 올리면 스며드는 은은한 네온 그린 */
-    border-color: #4ade80; /* 테두리가 네온으로 점등 */
-    color: #4ade80; /* 글씨가 네온으로 점등 */
+    background-color: rgba(74, 222, 128, 0.05); 
+    border-color: #4ade80; 
+    color: #4ade80; 
     transform: translateY(-2px); 
-    box-shadow: 0 4px 15px rgba(74, 222, 128, 0.15); /* 부드러운 빛 번짐 효과 */
+    box-shadow: 0 4px 15px rgba(74, 222, 128, 0.15); 
 }
 div.stButton > button:active {
-    transform: translateY(0px); /* 클릭 시 묵직하게 눌리는 느낌 */
+    transform: translateY(0px); 
     border-color: #22c55e;
     color: #22c55e;
 }
 
-/* AI 분석 박스 글로우 효과 */
+/* ⬇️ 2. 입력창 (종목코드, 차트봉, API Key) 다크 & 네온 스타일링 */
+div[data-baseweb="input"] > div, 
+div[data-baseweb="select"] > div {
+    background-color: #111318 !important;
+    border: 1px solid #2a3040 !important;
+    border-radius: 8px !important;
+    transition: all 0.3s ease !important;
+}
+div[data-baseweb="input"] > div:focus-within, 
+div[data-baseweb="select"] > div:focus-within {
+    border-color: #4ade80 !important;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.2) !important;
+    background-color: #151820 !important;
+}
+div[data-baseweb="input"] input, 
+div[data-baseweb="select"] div {
+    color: #f0f2f8 !important;
+    -webkit-text-fill-color: #f0f2f8 !important;
+}
+div[data-baseweb="input"] svg { fill: #94a3b8 !important; }
+
+/* ⬇️ AI 분석 박스 글로우 효과 (하이라이트 느낌) */
 .analysis-box { 
     background: linear-gradient(145deg, #111620 0%, #0d0f14 100%); 
     border: 1px solid #1e3040; 
@@ -66,9 +87,13 @@ div.stButton > button:active {
     box-shadow: 0 0 15px rgba(74, 222, 128, 0.05);
 }
 
-/* 공통 카드 클래스 애니메이션 */
+/* ⬇️ 공통 카드 클래스 애니메이션 (마우스 올리면 반응) */
 .hover-card { transition: all 0.3s ease; }
-.hover-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); border-color: #2a3040 !important; }
+.hover-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    border-color: #2a3040 !important;
+}
 
 .signal-card { background: #151820; border: 1px solid #1e2130; border-radius: 10px; padding: 14px 18px; margin-bottom: 8px; }
 .confidence-bar { height: 8px; border-radius: 4px; margin-top: 6px; }
