@@ -992,9 +992,24 @@ elif st.session_state.mode == "analyze":
 # 스크리닝 Top5
 # ══════════════════════════════════════
 elif st.session_state.mode == "screen":
-    st.markdown("## 🏆 교차검증 기반 매수 Top 5")
-    st.caption("엘리어트 × 일목균형표 × 멀티타임프레임 × 피보나치 × 다이버전스 종합 신뢰도")
+    # ⬇️ 여기서부터 덮어씌워 주세요 ⬇️
+    c1, c2 = st.columns([1.2, 1]) # 화면을 좌우 비율로 나눕니다.
+    with c1:
+        st.markdown("## 🏆 교차검증 기반 매수 Top 5")
+        st.caption("엘리어트 × 일목균형표 × 멀티타임프레임 × 피보나치 × 다이버전스 종합 신뢰도")
+    with c2:
+        # 우측 빈 공간에 신뢰도 점수 해석 가이드 박스 추가
+        st.markdown("""
+        <div style='background:#151820; border:1px solid #1e2130; border-left:3px solid #fbbf24; border-radius:8px; padding:12px 16px; font-size:11px; color:#94a3b8; line-height:1.6; margin-top:8px;'>
+            <b style='color:#f0f2f8; font-size:12px;'>💡 신뢰도 점수 실전 해석 가이드</b><br>
+            <span style='color:#4ade80; font-weight:700;'>■ 75% 이상 (발생 10% 미만)</span> : 5개 지표가 일치하는 완벽한 유니콘 타점<br>
+            <span style='color:#86efac; font-weight:700;'>■ 60~74% (주력 매수 구간)</span> : 확실한 상승 전환, 안정적 분할매수 최적기<br>
+            <span style='color:#fbbf24; font-weight:700;'>■ 45~59% (스나이퍼 구간)</span> : 50%대라도 핵심 지지선 도달 시 훌륭한 바닥 타점
+        </div>
+        """, unsafe_allow_html=True)
 
+    if st.session_state.screen_result is None:
+    # ⬆️ 여기까지 덮어씌워 주세요 ⬆️
     if st.session_state.screen_result is None:
         total=len(KR_UNIVERSE); prog_bar=st.progress(0); status=st.empty(); results=[]
         for i,(name,ticker) in enumerate(KR_UNIVERSE.items()):
