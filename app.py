@@ -1039,13 +1039,48 @@ elif st.session_state.mode == "analyze":
 # 스크리닝 Top5
 # ══════════════════════════════════════
 elif st.session_state.mode == "screen":
-    # ⬇️ 여기서부터 덮어씌워 주세요 ⬇️
-    c1, c2 = st.columns([1.2, 1]) # 화면을 좌우 비율로 나눕니다.
+    
+    # ⭐ [추가됨] 실시간 자금 유입 섹터 Top3의 선두기업을 추출하는 캐시 함수
+    @st.cache_data(ttl=300)
+    def get_dynamic_sector_leaders():
+        sector_tickers = {
+            "기술(XLK)":"XLK","헬스케어(XLV)":"XLV","금융(XLF)":"XLF",
+            "에너지(XLE)":"XLE","산업재(XLI)":"XLI","소비재(XLY)":"XLY",
+            "필수소비재(XLP)":"XLP","유틸리티(XLU)":"XLU","부동산(XLRE)":"XLRE",
+            "소재(XLB)":"XLB","통신(XLC)":"XLC",
+        }
+        sector_stocks = {
+            "XLK":["NVDA","MSFT","AAPL"], "XLV":["LLY","UNH","JNJ"], "XLF":["BRK-B","JPM","V"],
+            "XLE":["XOM","CVX","SLB"], "XLI":["GE","CAT","HON"], "XLY":["AMZN","TSLA","MCD"],
+            "XLP":["WMT","PG","KO"], "XLU":["NEE","DUK","SO"], "XLRE":["PLD","AMT","EQIX"],
+            "XLB":["LIN","APD","SHW"], "XLC":["META","GOOGL","DIS"],
+        }
+        leaders = {}
+        for name, t in sector_tickers.items():
+            try:
+                df = yf.download(t, period="5d", auto_adjust=True, progress=False)
+                if df is not None and not df.empty:
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = df.columns.get_level_values(0)
+                    c = df["Close"].squeeze().dropna()
+                    if len(c) >= 2:
+                        ret1w = float((c.iloc[-1]/c.iloc[0]-1)*100)
+                        leaders[name] = {"ret1w": ret1w, "stocks": sector_stocks[t]}
+            except: pass
+        
+        # 1주 수익률 기준 Top 3 섹터 정렬
+        sorted_sectors = sorted(leaders.items(), key=lambda x:x[1]["ret1w"], reverse=True)
+        top3_stocks = {}
+        for name, data in sorted_sectors[:3]:
+            for s in data["stocks"]:
+                top3_stocks[f"🔥{name} 주도주({s})"] = s
+        return top3_stocks
+
+    c1, c2 = st.columns([1.2, 1])
     with c1:
         st.markdown("## 🏆 교차검증 기반 매수 Top 5")
-        st.caption("엘리어트 × 일목균형표 × 멀티타임프레임 × 피보나치 × 다이버전스 종합 신뢰도")
+        st.caption("기본 36종목 + 🚀현재 자금이 몰리는 Top3 섹터 주도주 동적 합산")
     with c2:
-        # 우측 빈 공간에 신뢰도 점수 해석 가이드 박스 추가
         st.markdown("""
         <div style='background:#151820; border:1px solid #1e2130; border-left:3px solid #fbbf24; border-radius:8px; padding:12px 16px; font-size:11px; color:#94a3b8; line-height:1.6; margin-top:8px;'>
             <b style='color:#f0f2f8; font-size:12px;'>💡 신뢰도 점수 실전 해석 가이드</b><br>
@@ -1056,14 +1091,25 @@ elif st.session_state.mode == "screen":
         """, unsafe_allow_html=True)
 
     if st.session_state.screen_result is None:
-        total=len(KR_UNIVERSE); prog_bar=st.progress(0); status=st.empty(); results=[]
-        for i,(name,ticker) in enumerate(KR_UNIVERSE.items()):
+        
+        # ⭐ 기존 유니버스(36개)에 Top3 섹터 주도주(9개)를 합칩니다!
+        with st.spinner("섹터 모멘텀 분석 및 스크리닝 대상 구성 중..."):
+            dynamic_leaders = get_dynamic_sector_leaders()
+            
+        combined_universe = KR_UNIVERSE.copy()
+        combined_universe.update(dynamic_leaders)
+        
+        total=len(combined_universe); prog_bar=st.progress(0); status=st.empty(); results=[]
+        
+        for i,(name,ticker) in enumerate(combined_universe.items()):
             prog_bar.progress((i+1)/total)
             status.markdown(f"🔍 **{name}** ({ticker}) 교차검증 중... `{i+1} / {total}`")
             r = score_stock(name, ticker)
             if r and r["score"] > 0: results.append(r)
+            
         prog_bar.progress(1.0)
-        status.markdown(f"✅ 완료! {len(results)}개 종목 분석 → 신뢰도 순 Top 5 선정")
+        status.markdown(f"✅ 완료! 총 {total}개 종목 분석 → 신뢰도 순 Top 5 선정")
+        
         results.sort(key=lambda x: x["score"], reverse=True)
         st.session_state.screen_result = results[:5]
         st.rerun()
