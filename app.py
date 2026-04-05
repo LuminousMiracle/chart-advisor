@@ -772,7 +772,67 @@ if st.session_state.mode == "home":
 
     with st.spinner("🌐 글로벌 시장 데이터 수집 중... (최초 30초, 이후 5분 캐시)"):
         indices, fund_flow, sector_data, stock_perf = get_all_home_data()
+ 
+st.markdown("---")
+    st.markdown("## 🏭 자금이 몰리는 섹터 Top 5")
+    st.caption("미국 섹터 ETF 1주 수익률 기준 · 순위 변동 표시")
+    if sector_data:
+        sorted_sectors=sorted(sector_data.items(),key=lambda x:x[1]["ret1w"],reverse=True)
+        top5=sorted_sectors[:5]; worst1=sorted_sectors[-1]
+        max_ret=max(abs(v["ret1w"]) for _,v in sorted_sectors) or 1
+        rank1m_list=sorted(sector_data.items(),key=lambda x:x[1]["ret1m"],reverse=True)
+        for rank,(name,data) in enumerate(top5,1):
+            ret1w=data["ret1w"]; ret1m=data["ret1m"]
+            bar_w=int(abs(ret1w)/max_ret*100); bar_color="#4ade80" if ret1w>0 else "#f87171"
+            rank1m=next((i+1 for i,(n,_) in enumerate(rank1m_list) if n==name),0)
+            rank_diff=rank1m-rank
+            if rank_diff>2:   momentum,m_color=f"🚀 급상승 +{rank_diff}계단","#4ade80"
+            elif rank_diff>0: momentum,m_color=f"↗ 상승 +{rank_diff}계단","#86efac"
+            elif rank_diff==0: momentum,m_color="→ 유지","#94a3b8"
+            elif rank_diff>-3: momentum,m_color=f"↘ 하락 {rank_diff}계단","#fb923c"
+            else: momentum,m_color=f"📉 급락 {rank_diff}계단","#f87171"
+            rank_emoji=["🥇","🥈","🥉","4️⃣","5️⃣"][rank-1]
+            stocks_info=data.get("stocks",{}); leaders=stocks_info.get("leader",[]); darks=stocks_info.get("dark",[])
+            def badge(t,dark=False):
+                p=stock_perf.get(t,0); c="#4ade80" if p>0 else "#f87171"; s="▲" if p>0 else "▼"
+                b="#fbbf24" if dark else "#1e2130"
+                return f"<span style='background:#151820;border:1px solid {b};border-radius:6px;padding:3px 8px;font-size:11px;color:{c};margin-right:4px;'>{t} {s}{abs(p):.1f}%</span>"
+            lb="".join([badge(s) for s in leaders]); db="".join([badge(s,True) for s in darks])
+            st.markdown(f"""<div style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:16px 20px;margin-bottom:10px;'>
 
+    st.markdown("---")
+    st.markdown("## 💰 글로벌 투자자금 흐름")
+    st.caption("주요 ETF 거래대금 추세로 자금 증감 추정")
+    if fund_flow:
+        cols=st.columns(len(fund_flow))
+        for col,(name,data) in zip(cols,fund_flow.items()):
+            vc=data["vol_chg"]; pc=data["price_chg"]
+            if vc>5 and pc>0: status,sc="자금 유입 ↑","#4ade80"
+            elif vc<-5 and pc<0: status,sc="자금 유출 ↓","#f87171"
+            elif vc>5 and pc<0: status,sc="매도 급증 ⚠","#fb923c"
+            else: status,sc="보합","#94a3b8"
+            vc_c="#4ade80" if vc>0 else "#f87171"; pc_c="#4ade80" if pc>0 else "#f87171"
+            col.markdown(f"""<div style='background:#151820;border:1px solid #1e2130;border-radius:10px;padding:14px 12px;'>
+  <div style='font-size:11px;color:#4a5060;margin-bottom:6px;'>{name}</div>
+  <div style='font-size:13px;font-weight:700;color:{sc};margin-bottom:8px;'>{status}</div>
+  <div style='font-size:11px;color:#5a6070;'>거래대금 <span style='color:{vc_c};'>{"▲" if vc>0 else "▼"}{abs(vc):.1f}%</span></div>
+  <div style='font-size:11px;color:#5a6070;'>수익률 <span style='color:{pc_c};'>{"▲" if pc>0 else "▼"}{abs(pc):.1f}%</span></div>
+</div>""", unsafe_allow_html=True)
+
+   
+  <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>
+    <div><span style='font-size:16px;'>{rank_emoji}</span><span style='font-size:15px;font-weight:700;color:#f0f2f8;margin-left:8px;'>{name}</span><span style='font-size:12px;color:{m_color};margin-left:12px;'>{momentum}</span></div>
+    <div style='text-align:right;'><span style='font-size:14px;font-weight:700;color:{bar_color};font-family:DM Mono,monospace;'>{"▲" if ret1w>0 else "▼"}{abs(ret1w):.2f}%</span><span style='font-size:11px;color:#4a5060;margin-left:8px;'>1주 / 1달 {"▲" if ret1m>0 else "▼"}{abs(ret1m):.1f}%</span></div>
+  </div>
+  <div style='background:#1a1e2a;border-radius:4px;height:6px;margin-bottom:12px;'><div style='background:{bar_color};height:6px;border-radius:4px;width:{bar_w}%;'></div></div>
+  <div style='margin-bottom:6px;'><span style='font-size:10px;color:#4a5060;margin-right:8px;'>👑 선두</span>{lb}</div>
+  <div><span style='font-size:10px;color:#fbbf24;margin-right:8px;'>⚡ 다크호스</span>{db}</div>
+</div>""", unsafe_allow_html=True)
+        nw,dw=worst1; rw=dw["ret1w"]
+        st.markdown(f"<div style='background:#1a0d0d;border:1px solid #4a1a1a;border-radius:10px;padding:12px 16px;font-size:12px;color:#f87171;'>📉 자금 이탈 섹터: <b>{nw}</b> — {rw:.2f}% (1주)</div>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("<div style='text-align:center;color:#2a3040;font-size:13px;padding:12px 0;'>엘리어트 파동 × 일목균형표 × 멀티타임프레임 교차검증 플랫폼 · 사이드바에서 <b style='color:#4ade80;'>종목 분석</b> 또는 <b style='color:#4ade80;'>Top5 추천</b> 선택</div>", unsafe_allow_html=True)
+            
     st.markdown("## 🌍 글로벌 시장 현황")
     st.caption("yfinance 기준 · 5분 자동 갱신")
     icons = {"코스피":"🇰🇷","코스닥":"📊","나스닥":"🇺🇸","S&P500":"🗽","달러/원":"💵","VIX":"😨","금":"🥇","원유":"🛢️"}
@@ -816,64 +876,6 @@ if st.session_state.mode == "home":
             if not comments: comments.append("😐 특별한 시그널 없음")
             st.markdown("**💬 시장 해석**")
             for c in comments: st.markdown(f"• {c}")
-
-    st.markdown("---")
-    st.markdown("## 💰 글로벌 투자자금 흐름")
-    st.caption("주요 ETF 거래대금 추세로 자금 증감 추정")
-    if fund_flow:
-        cols=st.columns(len(fund_flow))
-        for col,(name,data) in zip(cols,fund_flow.items()):
-            vc=data["vol_chg"]; pc=data["price_chg"]
-            if vc>5 and pc>0: status,sc="자금 유입 ↑","#4ade80"
-            elif vc<-5 and pc<0: status,sc="자금 유출 ↓","#f87171"
-            elif vc>5 and pc<0: status,sc="매도 급증 ⚠","#fb923c"
-            else: status,sc="보합","#94a3b8"
-            vc_c="#4ade80" if vc>0 else "#f87171"; pc_c="#4ade80" if pc>0 else "#f87171"
-            col.markdown(f"""<div style='background:#151820;border:1px solid #1e2130;border-radius:10px;padding:14px 12px;'>
-  <div style='font-size:11px;color:#4a5060;margin-bottom:6px;'>{name}</div>
-  <div style='font-size:13px;font-weight:700;color:{sc};margin-bottom:8px;'>{status}</div>
-  <div style='font-size:11px;color:#5a6070;'>거래대금 <span style='color:{vc_c};'>{"▲" if vc>0 else "▼"}{abs(vc):.1f}%</span></div>
-  <div style='font-size:11px;color:#5a6070;'>수익률 <span style='color:{pc_c};'>{"▲" if pc>0 else "▼"}{abs(pc):.1f}%</span></div>
-</div>""", unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown("## 🏭 자금이 몰리는 섹터 Top 5")
-    st.caption("미국 섹터 ETF 1주 수익률 기준 · 순위 변동 표시")
-    if sector_data:
-        sorted_sectors=sorted(sector_data.items(),key=lambda x:x[1]["ret1w"],reverse=True)
-        top5=sorted_sectors[:5]; worst1=sorted_sectors[-1]
-        max_ret=max(abs(v["ret1w"]) for _,v in sorted_sectors) or 1
-        rank1m_list=sorted(sector_data.items(),key=lambda x:x[1]["ret1m"],reverse=True)
-        for rank,(name,data) in enumerate(top5,1):
-            ret1w=data["ret1w"]; ret1m=data["ret1m"]
-            bar_w=int(abs(ret1w)/max_ret*100); bar_color="#4ade80" if ret1w>0 else "#f87171"
-            rank1m=next((i+1 for i,(n,_) in enumerate(rank1m_list) if n==name),0)
-            rank_diff=rank1m-rank
-            if rank_diff>2:   momentum,m_color=f"🚀 급상승 +{rank_diff}계단","#4ade80"
-            elif rank_diff>0: momentum,m_color=f"↗ 상승 +{rank_diff}계단","#86efac"
-            elif rank_diff==0: momentum,m_color="→ 유지","#94a3b8"
-            elif rank_diff>-3: momentum,m_color=f"↘ 하락 {rank_diff}계단","#fb923c"
-            else: momentum,m_color=f"📉 급락 {rank_diff}계단","#f87171"
-            rank_emoji=["🥇","🥈","🥉","4️⃣","5️⃣"][rank-1]
-            stocks_info=data.get("stocks",{}); leaders=stocks_info.get("leader",[]); darks=stocks_info.get("dark",[])
-            def badge(t,dark=False):
-                p=stock_perf.get(t,0); c="#4ade80" if p>0 else "#f87171"; s="▲" if p>0 else "▼"
-                b="#fbbf24" if dark else "#1e2130"
-                return f"<span style='background:#151820;border:1px solid {b};border-radius:6px;padding:3px 8px;font-size:11px;color:{c};margin-right:4px;'>{t} {s}{abs(p):.1f}%</span>"
-            lb="".join([badge(s) for s in leaders]); db="".join([badge(s,True) for s in darks])
-            st.markdown(f"""<div style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:16px 20px;margin-bottom:10px;'>
-  <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>
-    <div><span style='font-size:16px;'>{rank_emoji}</span><span style='font-size:15px;font-weight:700;color:#f0f2f8;margin-left:8px;'>{name}</span><span style='font-size:12px;color:{m_color};margin-left:12px;'>{momentum}</span></div>
-    <div style='text-align:right;'><span style='font-size:14px;font-weight:700;color:{bar_color};font-family:DM Mono,monospace;'>{"▲" if ret1w>0 else "▼"}{abs(ret1w):.2f}%</span><span style='font-size:11px;color:#4a5060;margin-left:8px;'>1주 / 1달 {"▲" if ret1m>0 else "▼"}{abs(ret1m):.1f}%</span></div>
-  </div>
-  <div style='background:#1a1e2a;border-radius:4px;height:6px;margin-bottom:12px;'><div style='background:{bar_color};height:6px;border-radius:4px;width:{bar_w}%;'></div></div>
-  <div style='margin-bottom:6px;'><span style='font-size:10px;color:#4a5060;margin-right:8px;'>👑 선두</span>{lb}</div>
-  <div><span style='font-size:10px;color:#fbbf24;margin-right:8px;'>⚡ 다크호스</span>{db}</div>
-</div>""", unsafe_allow_html=True)
-        nw,dw=worst1; rw=dw["ret1w"]
-        st.markdown(f"<div style='background:#1a0d0d;border:1px solid #4a1a1a;border-radius:10px;padding:12px 16px;font-size:12px;color:#f87171;'>📉 자금 이탈 섹터: <b>{nw}</b> — {rw:.2f}% (1주)</div>", unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown("<div style='text-align:center;color:#2a3040;font-size:13px;padding:12px 0;'>엘리어트 파동 × 일목균형표 × 멀티타임프레임 교차검증 플랫폼 · 사이드바에서 <b style='color:#4ade80;'>종목 분석</b> 또는 <b style='color:#4ade80;'>Top5 추천</b> 선택</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════
 # 개별 종목 분석
