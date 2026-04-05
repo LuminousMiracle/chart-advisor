@@ -139,7 +139,7 @@ def calc_indicators(df):
     df["Kijun"]    = (high26 + low26) / 2          # 기준선 (26일)
     df["SenkouA"]  = ((df["Tenkan"]+df["Kijun"])/2).shift(26)   # 선행스팬A
     df["SenkouB"]  = ((high52+low52)/2).shift(26)               # 선행스팬B
-    df["Chikou"]   = close.shift(-26)                            # 후행스팬
+    df["Chikou"]   = close.shift(-26)                           # 후행스팬
 
     return df
 
@@ -673,7 +673,7 @@ with st.sidebar:
     show_ichi = st.toggle("일목균형표",   value=True)
     api_key   = st.text_input("Groq API Key", type="password", placeholder="gsk_...", help="console.groq.com 무료 발급")
     st.markdown("---")
-    if st.button("🏠 홈으로",           use_container_width=True):
+    if st.button("🏠 홈으로",            use_container_width=True):
         st.session_state.mode = "home"; st.rerun()
     if st.button("🔍 종목 분석",        use_container_width=True):
         st.session_state.mode = "analyze"; st.rerun()
@@ -772,8 +772,29 @@ if st.session_state.mode == "home":
 
     with st.spinner("🌐 글로벌 시장 데이터 수집 중... (최초 30초, 이후 5분 캐시)"):
         indices, fund_flow, sector_data, stock_perf = get_all_home_data()
- 
-st.markdown("---")
+
+    # 1. 글로벌 투자자금 흐름
+    st.markdown("## 💰 글로벌 투자자금 흐름")
+    st.caption("주요 ETF 거래대금 추세로 자금 증감 추정")
+    if fund_flow:
+        cols=st.columns(len(fund_flow))
+        for col,(name,data) in zip(cols,fund_flow.items()):
+            vc=data["vol_chg"]; pc=data["price_chg"]
+            if vc>5 and pc>0: status,sc="자금 유입 ↑","#4ade80"
+            elif vc<-5 and pc<0: status,sc="자금 유출 ↓","#f87171"
+            elif vc>5 and pc<0: status,sc="매도 급증 ⚠","#fb923c"
+            else: status,sc="보합","#94a3b8"
+            vc_c="#4ade80" if vc>0 else "#f87171"; pc_c="#4ade80" if pc>0 else "#f87171"
+            col.markdown(f"""<div style='background:#151820;border:1px solid #1e2130;border-radius:10px;padding:14px 12px;'>
+  <div style='font-size:11px;color:#4a5060;margin-bottom:6px;'>{name}</div>
+  <div style='font-size:13px;font-weight:700;color:{sc};margin-bottom:8px;'>{status}</div>
+  <div style='font-size:11px;color:#5a6070;'>거래대금 <span style='color:{vc_c};'>{"▲" if vc>0 else "▼"}{abs(vc):.1f}%</span></div>
+  <div style='font-size:11px;color:#5a6070;'>수익률 <span style='color:{pc_c};'>{"▲" if pc>0 else "▼"}{abs(pc):.1f}%</span></div>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # 2. 자금이 몰리는 섹터 Top 5
     st.markdown("## 🏭 자금이 몰리는 섹터 Top 5")
     st.caption("미국 섹터 ETF 1주 수익률 기준 · 순위 변동 표시")
     if sector_data:
@@ -799,27 +820,6 @@ st.markdown("---")
                 return f"<span style='background:#151820;border:1px solid {b};border-radius:6px;padding:3px 8px;font-size:11px;color:{c};margin-right:4px;'>{t} {s}{abs(p):.1f}%</span>"
             lb="".join([badge(s) for s in leaders]); db="".join([badge(s,True) for s in darks])
             st.markdown(f"""<div style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:16px 20px;margin-bottom:10px;'>
-
-    st.markdown("---")
-    st.markdown("## 💰 글로벌 투자자금 흐름")
-    st.caption("주요 ETF 거래대금 추세로 자금 증감 추정")
-    if fund_flow:
-        cols=st.columns(len(fund_flow))
-        for col,(name,data) in zip(cols,fund_flow.items()):
-            vc=data["vol_chg"]; pc=data["price_chg"]
-            if vc>5 and pc>0: status,sc="자금 유입 ↑","#4ade80"
-            elif vc<-5 and pc<0: status,sc="자금 유출 ↓","#f87171"
-            elif vc>5 and pc<0: status,sc="매도 급증 ⚠","#fb923c"
-            else: status,sc="보합","#94a3b8"
-            vc_c="#4ade80" if vc>0 else "#f87171"; pc_c="#4ade80" if pc>0 else "#f87171"
-            col.markdown(f"""<div style='background:#151820;border:1px solid #1e2130;border-radius:10px;padding:14px 12px;'>
-  <div style='font-size:11px;color:#4a5060;margin-bottom:6px;'>{name}</div>
-  <div style='font-size:13px;font-weight:700;color:{sc};margin-bottom:8px;'>{status}</div>
-  <div style='font-size:11px;color:#5a6070;'>거래대금 <span style='color:{vc_c};'>{"▲" if vc>0 else "▼"}{abs(vc):.1f}%</span></div>
-  <div style='font-size:11px;color:#5a6070;'>수익률 <span style='color:{pc_c};'>{"▲" if pc>0 else "▼"}{abs(pc):.1f}%</span></div>
-</div>""", unsafe_allow_html=True)
-
-   
   <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>
     <div><span style='font-size:16px;'>{rank_emoji}</span><span style='font-size:15px;font-weight:700;color:#f0f2f8;margin-left:8px;'>{name}</span><span style='font-size:12px;color:{m_color};margin-left:12px;'>{momentum}</span></div>
     <div style='text-align:right;'><span style='font-size:14px;font-weight:700;color:{bar_color};font-family:DM Mono,monospace;'>{"▲" if ret1w>0 else "▼"}{abs(ret1w):.2f}%</span><span style='font-size:11px;color:#4a5060;margin-left:8px;'>1주 / 1달 {"▲" if ret1m>0 else "▼"}{abs(ret1m):.1f}%</span></div>
@@ -830,9 +830,10 @@ st.markdown("---")
 </div>""", unsafe_allow_html=True)
         nw,dw=worst1; rw=dw["ret1w"]
         st.markdown(f"<div style='background:#1a0d0d;border:1px solid #4a1a1a;border-radius:10px;padding:12px 16px;font-size:12px;color:#f87171;'>📉 자금 이탈 섹터: <b>{nw}</b> — {rw:.2f}% (1주)</div>", unsafe_allow_html=True)
+    
     st.markdown("---")
-    st.markdown("<div style='text-align:center;color:#2a3040;font-size:13px;padding:12px 0;'>엘리어트 파동 × 일목균형표 × 멀티타임프레임 교차검증 플랫폼 · 사이드바에서 <b style='color:#4ade80;'>종목 분석</b> 또는 <b style='color:#4ade80;'>Top5 추천</b> 선택</div>", unsafe_allow_html=True)
-            
+
+    # 3. 글로벌 시장 현황 (맨 마지막으로 이동)
     st.markdown("## 🌍 글로벌 시장 현황")
     st.caption("yfinance 기준 · 5분 자동 갱신")
     icons = {"코스피":"🇰🇷","코스닥":"📊","나스닥":"🇺🇸","S&P500":"🗽","달러/원":"💵","VIX":"😨","금":"🥇","원유":"🛢️"}
@@ -876,6 +877,9 @@ st.markdown("---")
             if not comments: comments.append("😐 특별한 시그널 없음")
             st.markdown("**💬 시장 해석**")
             for c in comments: st.markdown(f"• {c}")
+
+    st.markdown("---")
+    st.markdown("<div style='text-align:center;color:#2a3040;font-size:13px;padding:12px 0;'>엘리어트 파동 × 일목균형표 × 멀티타임프레임 교차검증 플랫폼 · 사이드바에서 <b style='color:#4ade80;'>종목 분석</b> 또는 <b style='color:#4ade80;'>Top5 추천</b> 선택</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════
 # 개별 종목 분석
