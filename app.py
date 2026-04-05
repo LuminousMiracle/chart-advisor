@@ -826,93 +826,164 @@ if st.session_state.mode == "home":
 
    # 2. 글로벌 섹터 히트맵
 st.markdown("## 🗺️ 글로벌 섹터 히트맵")
-st.caption("미국 11개 섹터 1주 수익률 · 박스에 마우스를 올려 주도주 확인")
-
-if sector_data:
-    sorted_s = sorted(sector_data.items(), key=lambda x: x[1]["ret1w"], reverse=True)
-    best, worst = sorted_s[0], sorted_s[-1]
-
-    def ret_color(r):
-        if r > 4:    return "#14532d", "#4ade80"
-        if r > 2:    return "#166534", "#86efac"
-        if r > 0.5:  return "#1a3d2a", "#6ee7a0"
-        if r > 0:    return "#1a2820", "#5a8a6a"
-        if r > -2:   return "#3d1a1a", "#fca5a5"
-        if r > -4:   return "#5a1a1a", "#f87171"
-        return "#7f1d1d", "#ef4444"
-
-    # 수익률 절댓값에 따라 박스 너비 결정 (최소 1, 최대 4)
-    max_abs = max(abs(v["ret1w"]) for _, v in sector_data.items()) or 1
-
-    cells_html = ""
-    for name, data in sorted_s:
-        r = data["ret1w"]
-        r1m = data["ret1m"]
-        bg, fg = ret_color(r)
-        sign = "+" if r >= 0 else ""
-        bar_w = int(min(100, abs(r) / max_abs * 100))
-        leaders = ", ".join(data.get("stocks", {}).get("leader", []))
-        darks   = ", ".join(data.get("stocks", {}).get("dark",   []))
-        # 박스 flex-grow를 절댓값으로 설정
-        flex = max(1, int(abs(r) / max_abs * 4 + 0.5))
-
-        cells_html += f"""
-<div style='flex:{flex};min-width:80px;background:{bg};border-radius:8px;padding:12px 14px;
-    cursor:default;position:relative;overflow:hidden;transition:transform 0.15s;'
-    onmouseenter='showTT(this,"{name}","{sign}{r:.2f}%","{("+" if r1m>=0 else "")}{r1m:.2f}%","{leaders}","{darks}","{fg}")'
-    onmouseleave='hideTT()'>
-  <div style='font-size:11px;color:{fg};opacity:0.7;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{name}</div>
-  <div style='font-size:20px;font-weight:700;color:{fg};letter-spacing:-0.5px;'>{sign}{r:.2f}%</div>
-  <div style='position:absolute;bottom:0;left:0;height:3px;width:{bar_w}%;background:{fg};opacity:0.4;'></div>
+    st.caption("섹터 버튼을 클릭하면 주도주 · 다크호스 상세 정보가 펼쳐집니다")
+ 
+    if sector_data:
+        sorted_s  = sorted(sector_data.items(), key=lambda x: x[1]["ret1w"], reverse=True)
+        max_abs   = max(abs(v["ret1w"]) for _, v in sector_data.items()) or 1
+ 
+        def ret_color(r):
+            if r >  4:   return "#0f3320", "#4ade80"
+            if r >  2:   return "#133d25", "#6ee7a0"
+            if r >  0.5: return "#162e1e", "#86efac"
+            if r >  0:   return "#131f18", "#5a8a6a"
+            if r > -2:   return "#2a1010", "#fca5a5"
+            if r > -4:   return "#3d1212", "#f87171"
+            return "#5a0f0f", "#ef4444"
+ 
+        # ── 히트맵 (HTML 시각화)
+        cells_html = ""
+        for name, data in sorted_s:
+            r      = data["ret1w"]
+            r1m    = data["ret1m"]
+            bg, fg = ret_color(r)
+            sign   = "+" if r >= 0 else ""
+            flex   = max(1, round(abs(r) / max_abs * 5 + 0.5))
+            bar_w  = int(abs(r) / max_abs * 100)
+            is_sel = st.session_state.selected_sector == name
+            border = f"2px solid {fg}" if is_sel else "2px solid rgba(255,255,255,0.04)"
+            cells_html += f"""<div style='flex:{flex};min-width:68px;background:{bg};border-radius:8px;
+    padding:11px 12px;position:relative;overflow:hidden;border:{border};box-sizing:border-box;'>
+  <div style='font-size:10px;color:{fg};opacity:0.7;margin-bottom:4px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{name}</div>
+  <div style='font-size:18px;font-weight:700;color:{fg};letter-spacing:-0.5px;'>{sign}{r:.2f}%</div>
+  <div style='font-size:10px;color:{fg};opacity:0.45;margin-top:2px;'>{("+" if r1m>=0 else "")}{r1m:.1f}% 1달</div>
+  <div style='position:absolute;bottom:0;left:0;height:3px;width:{bar_w}%;background:{fg};opacity:0.3;'></div>
 </div>"""
-
-    st.markdown(f"""
-<div style='position:relative;'>
-  <div style='display:flex;gap:3px;height:140px;'>
-    {cells_html}
-  </div>
-  <div id='hm-tt' style='display:none;position:absolute;background:#0f1218;border:1px solid #2a3040;
-      border-radius:10px;padding:14px 16px;width:220px;z-index:100;pointer-events:none;
-      box-shadow:0 8px 24px rgba(0,0,0,0.6);font-family:monospace;font-size:12px;'>
-    <div id='hm-tt-name' style='font-size:13px;font-weight:700;color:#f0f2f8;margin-bottom:8px;'></div>
-    <div style='color:#5a6070;margin-bottom:2px;'>1주 <span id='hm-tt-1w' style='font-weight:700;'></span></div>
-    <div style='color:#5a6070;margin-bottom:8px;'>1달 <span id='hm-tt-1m' style='color:#94a3b8;'></span></div>
-    <div style='border-top:1px solid #1e2130;padding-top:8px;margin-bottom:4px;color:#5a6070;font-size:11px;'>👑 선두</div>
-    <div id='hm-tt-leaders' style='margin-bottom:8px;'></div>
-    <div style='color:#fbbf24;font-size:11px;margin-bottom:4px;'>⚡ 다크호스</div>
-    <div id='hm-tt-darks'></div>
-  </div>
+ 
+        st.markdown(f"""
+<div style='display:flex;gap:3px;height:120px;margin-bottom:6px;'>
+  {cells_html}
 </div>
-<script>
-function showTT(el,name,w1,m1,leaders,darks,fg){{
-  document.getElementById('hm-tt-name').textContent=name;
-  document.getElementById('hm-tt-1w').textContent=w1;
-  document.getElementById('hm-tt-1w').style.color=fg;
-  document.getElementById('hm-tt-1m').textContent=m1;
-  document.getElementById('hm-tt-leaders').innerHTML=leaders.split(',').map(t=>`<span style='display:inline-block;background:#1a1e2a;border-radius:4px;padding:2px 6px;margin:2px;font-size:10px;color:#94a3b8;'>${{t.trim()}}</span>`).join('');
-  document.getElementById('hm-tt-darks').innerHTML=darks.split(',').map(t=>`<span style='display:inline-block;background:#1a1500;border:1px solid #3a3010;border-radius:4px;padding:2px 6px;margin:2px;font-size:10px;color:#fbbf24;'>${{t.trim()}}</span>`).join('');
-  const tt=document.getElementById('hm-tt');
-  const r=el.getBoundingClientRect();
-  tt.style.display='block';
-}}
-function hideTT(){{document.getElementById('hm-tt').style.display='none';}}
-</script>
-<div style='display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:#3a4050;'>
+<div style='display:flex;align-items:center;gap:8px;font-size:11px;color:#3a4050;margin-bottom:10px;'>
   <span>하락</span>
-  <div style='width:100px;height:5px;border-radius:3px;background:linear-gradient(to right,#7f1d1d,#1e2130,#14532d);'></div>
+  <div style='width:80px;height:4px;border-radius:2px;background:linear-gradient(to right,#5a0f0f,#1a1e2a,#0f3320);'></div>
   <span>상승</span>
-  <span style='margin-left:12px;'>박스 너비 = 수익률 크기</span>
+  <span style='margin-left:10px;'>박스 너비 = 수익률 크기</span>
 </div>
-<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;'>
-  <div style='padding:10px 14px;border-radius:8px;background:rgba(20,83,45,0.4);border:1px solid rgba(74,222,128,0.2);color:#4ade80;'>
-    <div style='font-size:10px;opacity:0.6;margin-bottom:2px;'>자금 유입 1위</div>
-    <div style='font-weight:700;'>{best[0]}</div>
-    <div style='font-size:18px;font-weight:700;'>+{best[1]['ret1w']:.2f}%</div>
+""", unsafe_allow_html=True)
+ 
+        # ── 섹터 선택 버튼 (Streamlit 네이티브)
+        rank1m_list = sorted(sector_data.items(), key=lambda x: x[1]["ret1m"], reverse=True)
+        btn_cols = st.columns(len(sorted_s))
+        for i, (name, data) in enumerate(sorted_s):
+            r = data["ret1w"]
+            _, fg = ret_color(r)
+            sign  = "+" if r >= 0 else ""
+            rank1m    = next((j+1 for j,(n,_) in enumerate(rank1m_list) if n==name), 0)
+            rank_now  = i + 1
+            rank_diff = rank1m - rank_now
+            if rank_diff > 2:    arrow = "🚀"
+            elif rank_diff > 0:  arrow = "↗"
+            elif rank_diff == 0: arrow = "→"
+            elif rank_diff > -3: arrow = "↘"
+            else:                arrow = "📉"
+            with btn_cols[i]:
+                btn_label = f"{arrow} {sign}{r:.1f}%"
+                if st.button(btn_label, key=f"sec_{name}", help=name, use_container_width=True):
+                    if st.session_state.selected_sector == name:
+                        st.session_state.selected_sector = None
+                    else:
+                        st.session_state.selected_sector = name
+                    st.rerun()
+ 
+        # ── 선택된 섹터 상세 패널
+        sel = st.session_state.selected_sector
+        if sel and sel in dict(sorted_s):
+            sel_data = dict(sorted_s)[sel]
+            r        = sel_data["ret1w"]
+            r1m      = sel_data["ret1m"]
+            bg, fg   = ret_color(r)
+            sign     = "+" if r >= 0 else ""
+            leaders  = sel_data.get("stocks", {}).get("leader", [])
+            darks    = sel_data.get("stocks", {}).get("dark",   [])
+ 
+            st.markdown(f"""
+<div style='background:#111620;border:1px solid #1e3040;border-left:3px solid {fg};
+    border-radius:12px;padding:20px 24px;margin:8px 0;'>
+  <div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;'>
+    <div>
+      <div style='font-size:10px;color:#4a5060;letter-spacing:0.12em;margin-bottom:4px;'>선택된 섹터</div>
+      <div style='font-size:19px;font-weight:700;color:#f0f2f8;'>{sel}</div>
+    </div>
+    <div style='text-align:right;'>
+      <div style='font-size:26px;font-weight:800;color:{fg};font-family:monospace;'>{sign}{r:.2f}%</div>
+      <div style='font-size:11px;color:#5a6070;'>1주 &nbsp;·&nbsp; {("+" if r1m>=0 else "")}{r1m:.1f}% 1달</div>
+    </div>
   </div>
-  <div style='padding:10px 14px;border-radius:8px;background:rgba(127,29,29,0.4);border:1px solid rgba(248,113,113,0.2);color:#f87171;'>
-    <div style='font-size:10px;opacity:0.6;margin-bottom:2px;'>자금 이탈 1위</div>
-    <div style='font-weight:700;'>{worst[0]}</div>
-    <div style='font-size:18px;font-weight:700;'>{worst[1]['ret1w']:.2f}%</div>
+  <div style='display:grid;grid-template-columns:1fr 1fr;gap:14px;'>
+    <div style='background:#0d1420;border:1px solid #1e2a40;border-radius:10px;padding:16px;'>
+      <div style='font-size:10px;color:#4a5060;letter-spacing:0.1em;margin-bottom:12px;'>👑 섹터 선두 (시총 상위)</div>
+""", unsafe_allow_html=True)
+ 
+            for ticker in leaders:
+                perf = stock_perf.get(ticker, 0)
+                pc   = "#4ade80" if perf >= 0 else "#f87171"
+                ps   = "+" if perf >= 0 else ""
+                st.markdown(f"""
+<div style='display:flex;justify-content:space-between;align-items:center;
+    padding:10px 12px;margin-bottom:6px;background:#151820;
+    border-radius:8px;border:1px solid #1e2130;'>
+  <div>
+    <div style='font-size:14px;font-weight:700;color:#f0f2f8;font-family:monospace;'>{ticker}</div>
+    <div style='font-size:10px;color:#4a5060;margin-top:1px;'>1개월 수익률</div>
+  </div>
+  <div style='font-size:16px;font-weight:700;color:{pc};font-family:monospace;'>{ps}{perf:.1f}%</div>
+</div>""", unsafe_allow_html=True)
+ 
+            st.markdown("""
+    </div>
+    <div style='background:#0d1420;border:1px solid #3a3010;border-radius:10px;padding:16px;'>
+      <div style='font-size:10px;color:#fbbf24;letter-spacing:0.1em;margin-bottom:12px;'>⚡ 다크호스 (최근 급부상)</div>
+""", unsafe_allow_html=True)
+ 
+            for ticker in darks:
+                perf = stock_perf.get(ticker, 0)
+                pc   = "#4ade80" if perf >= 0 else "#f87171"
+                ps   = "+" if perf >= 0 else ""
+                st.markdown(f"""
+<div style='display:flex;justify-content:space-between;align-items:center;
+    padding:10px 12px;margin-bottom:6px;background:#151820;
+    border-radius:8px;border:1px solid #3a3010;'>
+  <div>
+    <div style='font-size:14px;font-weight:700;color:#fbbf24;font-family:monospace;'>{ticker}</div>
+    <div style='font-size:10px;color:#4a5060;margin-top:1px;'>1개월 수익률</div>
+  </div>
+  <div style='font-size:16px;font-weight:700;color:{pc};font-family:monospace;'>{ps}{perf:.1f}%</div>
+</div>""", unsafe_allow_html=True)
+ 
+            st.markdown("</div></div></div>", unsafe_allow_html=True)
+            if st.button("✕ 닫기", key="close_sector"):
+                st.session_state.selected_sector = None
+                st.rerun()
+ 
+        # ── 유입/이탈 요약
+        best, worst = sorted_s[0], sorted_s[-1]
+        _, best_fg  = ret_color(best[1]["ret1w"])
+        _, worst_fg = ret_color(worst[1]["ret1w"])
+        st.markdown(f"""
+<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;'>
+  <div style='padding:12px 16px;border-radius:8px;background:rgba(15,51,32,0.6);
+      border:1px solid rgba(74,222,128,0.2);'>
+    <div style='font-size:10px;color:#4a5060;margin-bottom:3px;'>🔥 자금 유입 1위</div>
+    <div style='font-size:13px;font-weight:700;color:{best_fg};'>{best[0]}</div>
+    <div style='font-size:20px;font-weight:800;color:{best_fg};font-family:monospace;'>+{best[1]["ret1w"]:.2f}%</div>
+  </div>
+  <div style='padding:12px 16px;border-radius:8px;background:rgba(90,15,15,0.6);
+      border:1px solid rgba(248,113,113,0.2);'>
+    <div style='font-size:10px;color:#4a5060;margin-bottom:3px;'>❄️ 자금 이탈 1위</div>
+    <div style='font-size:13px;font-weight:700;color:{worst_fg};'>{worst[0]}</div>
+    <div style='font-size:20px;font-weight:800;color:{worst_fg};font-family:monospace;'>{worst[1]["ret1w"]:.2f}%</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
