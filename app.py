@@ -8,14 +8,47 @@ from groq import Groq
 
 st.set_page_config(page_title="차트 분석 어드바이저", page_icon="📈", layout="wide")
 st.markdown("""
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700&display=swap');
 html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 .stApp { background-color: #0d0f14; }
 [data-testid="stSidebar"] { background-color: #111318; border-right: 1px solid #1e2130; }
-div.stButton > button { background: #4ade80; color: #0d1a0f; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; padding: 10px 24px; width: 100%; margin-bottom: 8px; }
-div.stButton > button:hover { background: #22c55e; }
-.analysis-box { background: #111620; border: 1px solid #1e3040; border-left: 3px solid #4ade80; border-radius: 10px; padding: 20px 24px; font-size: 14px; line-height: 1.9; color: #c8d0e0; white-space: pre-wrap; }
+
+/* ⬇️ 스크롤바 커스텀 (다크모드 몰입감 100%) */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0d0f14; }
+::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #4a5060; }
+
+/* 버튼 스타일 */
+div.stButton > button { background: #4ade80; color: #0d1a0f; border: none; border-radius: 8px; font-weight: 700; font-size: 14px; padding: 10px 24px; width: 100%; margin-bottom: 8px; transition: all 0.2s ease; }
+div.stButton > button:hover { background: #22c55e; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2); }
+
+/* ⬇️ AI 분석 박스 글로우 효과 (하이라이트 느낌) */
+.analysis-box { 
+    background: linear-gradient(145deg, #111620 0%, #0d0f14 100%); 
+    border: 1px solid #1e3040; 
+    border-left: 3px solid #4ade80; 
+    border-radius: 10px; 
+    padding: 20px 24px; 
+    font-size: 14px; 
+    line-height: 1.9; 
+    color: #c8d0e0; 
+    white-space: pre-wrap; 
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.05);
+}
+
+/* ⬇️ 공통 카드 클래스 애니메이션 (마우스 올리면 반응) */
+.hover-card {
+    transition: all 0.3s ease;
+}
+.hover-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    border-color: #2a3040 !important;
+}
+
 .signal-card { background: #151820; border: 1px solid #1e2130; border-radius: 10px; padding: 14px 18px; margin-bottom: 8px; }
 .confidence-bar { height: 8px; border-radius: 4px; margin-top: 6px; }
 </style>
@@ -501,7 +534,16 @@ def build_chart(df, ticker, show_fib=True, show_ichi=True):
         font=dict(color="#5a6070", size=10),
         xaxis_rangeslider_visible=False, height=760,
         margin=dict(l=0, r=110, t=20, b=0),
-        legend=dict(bgcolor="#111318", bordercolor="#1e2130", borderwidth=1, orientation="h", x=0, y=1.01, font=dict(size=9))
+        legend=dict(bgcolor="#111318", bordercolor="#1e2130", borderwidth=1, orientation="h", x=0, y=1.01, font=dict(size=9)),
+        
+        # ⬇️ 추가된 부분: 통합 툴팁(십자선) 설정
+        hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor="#151820",
+            font_size=12,
+            font_family="DM Mono"
+        )
+    )
     )
     for row in [1,2,3,4]:
         fig.update_xaxes(gridcolor="#1a1e2a", row=row, col=1)
