@@ -523,7 +523,7 @@ if st.session_state.mode == "home":
             ret1w = float((c1w.iloc[-1]/c1w.iloc[0]-1)*100)
             ret1m = float((c1m.iloc[-1]/c1m.iloc[0]-1)*100)
             # 거래대금 증가율
-            vol_recent = float((c1w["Close"] * v1w).iloc[-3:].mean()) if hasattr(c1w, "name") else float((df1w["Close"].squeeze() * df1w["Volume"].squeeze()).iloc[-3:].mean())
+            vol_recent = float((df1w["Close"].squeeze() * df1w["Volume"].squeeze()).iloc[-3:].mean())
             sector_data[name] = {
                 "ticker": t,
                 "ret1w": ret1w,
