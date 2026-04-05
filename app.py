@@ -694,7 +694,6 @@ updateTime();
     st.markdown("---")
 
     # ── 2. 글로벌 섹터 히트맵  ← 오류2 수정: 들여쓰기 4칸
-   st.markdown("---")
     st.markdown("## 🏭 자금이 몰리는 섹터 Top 5")
     st.caption("미국 섹터 ETF 1주 수익률 기준 · 순위 변동 표시")
     if sector_data:
