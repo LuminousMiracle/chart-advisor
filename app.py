@@ -824,42 +824,73 @@ if st.session_state.mode == "home":
 
     st.markdown("---")
 
-    # 2. 자금이 몰리는 섹터 Top 5
-    st.markdown("## 🏭 자금이 몰리는 섹터 Top 5")
-    st.caption("미국 섹터 ETF 1주 수익률 기준 · 순위 변동 표시")
+    # 2. 글로벌 섹터 히트맵 (자금 흐름)
+    st.markdown("## 🗺️ 글로벌 섹터 히트맵")
+    st.caption("미국 11개 섹터 1주 수익률 기준 · 박스에 마우스를 올려 주도주를 확인하세요")
     if sector_data:
-        sorted_sectors=sorted(sector_data.items(),key=lambda x:x[1]["ret1w"],reverse=True)
-        top5=sorted_sectors[:5]; worst1=sorted_sectors[-1]
-        max_ret=max(abs(v["ret1w"]) for _,v in sorted_sectors) or 1
-        rank1m_list=sorted(sector_data.items(),key=lambda x:x[1]["ret1m"],reverse=True)
-        for rank,(name,data) in enumerate(top5,1):
-            ret1w=data["ret1w"]; ret1m=data["ret1m"]
-            bar_w=int(abs(ret1w)/max_ret*100); bar_color="#4ade80" if ret1w>0 else "#f87171"
-            rank1m=next((i+1 for i,(n,_) in enumerate(rank1m_list) if n==name),0)
-            rank_diff=rank1m-rank
-            if rank_diff>2:   momentum,m_color=f"🚀 급상승 +{rank_diff}계단","#4ade80"
-            elif rank_diff>0: momentum,m_color=f"↗ 상승 +{rank_diff}계단","#86efac"
-            elif rank_diff==0: momentum,m_color="→ 유지","#94a3b8"
-            elif rank_diff>-3: momentum,m_color=f"↘ 하락 {rank_diff}계단","#fb923c"
-            else: momentum,m_color=f"📉 급락 {rank_diff}계단","#f87171"
-            rank_emoji=["🥇","🥈","🥉","4️⃣","5️⃣"][rank-1]
-            stocks_info=data.get("stocks",{}); leaders=stocks_info.get("leader",[]); darks=stocks_info.get("dark",[])
-            def badge(t,dark=False):
-                p=stock_perf.get(t,0); c="#4ade80" if p>0 else "#f87171"; s="▲" if p>0 else "▼"
-                b="#fbbf24" if dark else "#1e2130"
-                return f"<span style='background:#151820;border:1px solid {b};border-radius:6px;padding:3px 8px;font-size:11px;color:{c};margin-right:4px;'>{t} {s}{abs(p):.1f}%</span>"
-            lb="".join([badge(s) for s in leaders]); db="".join([badge(s,True) for s in darks])
-            st.markdown(f"""<div class='hover-card' style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:16px 20px;margin-bottom:10px;'>
-  <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>
-    <div><span style='font-size:16px;'>{rank_emoji}</span><span style='font-size:15px;font-weight:700;color:#f0f2f8;margin-left:8px;'>{name}</span><span style='font-size:12px;color:{m_color};margin-left:12px;'>{momentum}</span></div>
-    <div style='text-align:right;'><span style='font-size:14px;font-weight:700;color:{bar_color};font-family:DM Mono,monospace;'>{"▲" if ret1w>0 else "▼"}{abs(ret1w):.2f}%</span><span style='font-size:11px;color:#4a5060;margin-left:8px;'>1주 / 1달 {"▲" if ret1m>0 else "▼"}{abs(ret1m):.1f}%</span></div>
-  </div>
-  <div style='background:#1a1e2a;border-radius:4px;height:6px;margin-bottom:12px;'><div style='background:{bar_color};height:6px;border-radius:4px;width:{bar_w}%;'></div></div>
-  <div style='margin-bottom:6px;'><span style='font-size:10px;color:#4a5060;margin-right:8px;'>👑 선두</span>{lb}</div>
-  <div><span style='font-size:10px;color:#fbbf24;margin-right:8px;'>⚡ 다크호스</span>{db}</div>
-</div>""", unsafe_allow_html=True)
-        nw,dw=worst1; rw=dw["ret1w"]
-        st.markdown(f"<div style='background:#1a0d0d;border:1px solid #4a1a1a;border-radius:10px;padding:12px 16px;font-size:12px;color:#f87171;'>📉 자금 이탈 섹터: <b>{nw}</b> — {rw:.2f}% (1주)</div>", unsafe_allow_html=True)
+        labels = []
+        parents = []
+        values = []
+        colors = []
+        customdata = []
+
+        for name, data in sector_data.items():
+            labels.append(name)
+            parents.append("") # 모든 섹터를 동일한 최상위 레벨로 배치
+            values.append(1)   # 박스 크기를 동일하게 설정 (수익률 크기로 하려면 abs(data["ret1w"]) 사용 가능)
+            colors.append(data["ret1w"])
+            
+            # 툴팁용 주도주/다크호스 데이터 가공
+            leaders = ", ".join(data.get("stocks", {}).get("leader", []))
+            darks = ", ".join(data.get("stocks", {}).get("dark", []))
+            customdata.append([data["ret1w"], data["ret1m"], leaders, darks])
+
+        # Plotly Treemap 생성
+        fig = go.Figure(go.Treemap(
+            labels=labels,
+            parents=parents,
+            values=values,
+            marker=dict(
+                colors=colors,
+                colorscale=[[0, '#ef4444'], [0.5, '#1e2130'], [1, '#22c55e']], # 하락(빨강) - 보합(다크) - 상승(네온그린)
+                cmid=0,
+                line=dict(width=2, color='#0d0f14') # 박스 사이 간격 선
+            ),
+            texttemplate="<b style='font-size:15px'>%{label}</b><br><span style='font-size:16px; font-family:DM Mono'>%{customdata[0]:+.2f}%</span>",
+            customdata=customdata,
+            hovertemplate=(
+                "<b style='font-size:14px'>%{label}</b><br>"
+                "<br>📈 1주 수익률: <b><span style='font-family:DM Mono'>%{customdata[0]:+.2f}%</span></b>"
+                "<br>📊 1달 수익률: <span style='font-family:DM Mono'>%{customdata[1]:+.2f}%</span>"
+                "<br><br>👑 선두: %{customdata[2]}"
+                "<br>⚡ 다크호스: %{customdata[3]}"
+                "<extra></extra>"
+            ),
+            textfont=dict(family="Noto Sans KR", color="white")
+        ))
+        
+        fig.update_layout(
+            margin=dict(t=0, l=0, r=0, b=0),
+            paper_bgcolor="#0d0f14",
+            plot_bgcolor="#0d0f14",
+            height=380,
+            hoverlabel=dict(bgcolor="#151820", font_size=13, font_family="Noto Sans KR", bordercolor="#2a3040")
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        
+        # 하단 요약 패널 (가장 뜨거운 섹터와 차가운 섹터)
+        sorted_sectors = sorted(sector_data.items(), key=lambda x: x[1]["ret1w"], reverse=True)
+        best, worst = sorted_sectors[0], sorted_sectors[-1]
+        st.markdown(f"""
+        <div style='display:flex; justify-content:space-between; gap:12px; margin-top:-8px;'>
+            <div style='flex:1; background:rgba(34, 197, 94, 0.1); border:1px solid #22c55e; border-radius:8px; padding:12px 16px; font-size:13px; color:#4ade80;'>
+                🔥 <b>자금 유입 1위:</b> {best[0]} <span style='font-family:DM Mono'>({best[1]['ret1w']:+.2f}%)</span>
+            </div>
+            <div style='flex:1; background:rgba(239, 68, 68, 0.1); border:1px solid #ef4444; border-radius:8px; padding:12px 16px; font-size:13px; color:#f87171;'>
+                ❄️ <b>자금 이탈 1위:</b> {worst[0]} <span style='font-family:DM Mono'>({worst[1]['ret1w']:+.2f}%)</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     st.markdown("---")
 
