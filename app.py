@@ -697,8 +697,8 @@ if st.session_state.mode == "home":
     # ⬇️ 여기서부터 덮어씌워 주세요 ⬇️
     fetch_time_str = fetch_time.strftime('%H:%M:%S')
     next_update_str = next_update.strftime('%H:%M:%S')
+    next_update_iso = next_update.isoformat() # ⭐ 자바스크립트로 시간을 넘기기 위한 변수 추가
 
-    # 자바스크립트를 주입하여 1초마다 브라우저에서 시계가 움직이도록 만듭니다.
     clock_html = f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -711,7 +711,7 @@ if st.session_state.mode == "home":
         .next {{ color:#fbbf24; font-family:'DM Mono', monospace; font-weight:700; font-size:13px; }}
     </style>
     <div class="time-panel">
-        <div class="title">🕒 시간 정보 & 데이터 갱신 (5분)</div>
+        <div class="title">🕒 시간 정보 & 데이터 자동 갱신</div>
         <div class="row">
             <span>현재 시간</span>
             <span class="clock" id="live-clock">--:--:--</span>
@@ -726,9 +726,12 @@ if st.session_state.mode == "home":
         </div>
     </div>
     <script>
+        // 파이썬에서 넘겨준 '다음 업데이트' 시간을 자바스크립트가 인식합니다.
+        const targetTime = new Date("{next_update_iso}").getTime();
+
         function updateTime() {{
             const now = new Date();
-            // 사용자의 기기 시간을 기준으로 한국 시간(KST)을 계산하여 표시
+            // 한국 시간(KST) 계산
             const kstOffset = 9 * 60; 
             const localOffset = now.getTimezoneOffset();
             const kstTime = new Date(now.getTime() + (kstOffset + localOffset) * 60000);
@@ -737,13 +740,18 @@ if st.session_state.mode == "home":
             const mm = String(kstTime.getMinutes()).padStart(2, '0');
             const ss = String(kstTime.getSeconds()).padStart(2, '0');
             document.getElementById('live-clock').innerText = hh + ':' + mm + ':' + ss;
+
+            // ⭐ 핵심 로직: 현재 시간이 '다음 업데이트' 시간에 도달하면 화면 자동 새로고침!
+            // (파이썬 캐시가 확실히 만료되도록 목표 시간보다 3초 뒤에 새로고침을 실행합니다)
+            if (now.getTime() >= targetTime + 3000) {{
+                window.parent.location.reload();
+            }}
         }}
         setInterval(updateTime, 1000);
         updateTime();
     </script>
     """
     
-    # Streamlit의 components 모듈을 사용해 HTML/JS를 사이드바에 렌더링 (높이 고정)
     with refresh_placeholder:
         components.html(clock_html, height=120)
     # ⬆️ 여기까지 덮어씌워 주세요 ⬆️
