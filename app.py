@@ -929,7 +929,7 @@ elif st.session_state.mode == "screen":
         top3_stocks = {}
         for name, data in sorted_sectors[:3]:
             for s in data["stocks"]:
-                top3_stocks[f"🔥{name} 주도주({s})"] = s
+                top3_stocks[s] = s
         return top3_stocks
 
     c1, c2 = st.columns([1.2, 1])
