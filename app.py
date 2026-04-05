@@ -249,9 +249,95 @@ with st.sidebar:
     st.markdown("<div style='font-size:11px;color:#2a3040;margin-top:12px;line-height:1.8;'>삼성전자 005930.KS<br>SK하이닉스 000660.KS<br>HPSP 403870.KQ<br>애플 AAPL / 엔비디아 NVDA</div>", unsafe_allow_html=True)
 
 # ── 홈
+# ── 홈
 if st.session_state.mode == "home":
-    st.markdown("<div style='text-align:center;padding:100px 0;color:#2a3040;'><div style='font-size:52px;'>📈</div><div style='font-size:18px;color:#3a4050;margin-top:16px;'>종목 분석 또는 Top5 추천을 선택하세요</div></div>", unsafe_allow_html=True)
+    st.markdown("### 📊 실시간 시장 현황")
+    st.caption("yfinance 기준 · 자동 갱신")
 
+    @st.cache_data(ttl=300)
+    def get_market_data():
+        tickers = {
+            "코스피": "^KS11",
+            "코스닥": "^KQ11",
+            "나스닥": "^IXIC",
+            "달러/원": "KRW=X",
+            "VIX(공포지수)": "^VIX",
+        }
+        result = {}
+        for name, ticker in tickers.items():
+            try:
+                df = yf.download(ticker, period="5d", auto_adjust=True, progress=False)
+                if df is None or df.empty:
+                    continue
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
+                close = df["Close"].squeeze().dropna()
+                cur  = float(close.iloc[-1])
+                prev = float(close.iloc[-2])
+                chg  = (cur / prev - 1) * 100
+                result[name] = {"cur": cur, "chg": chg, "ticker": ticker}
+            except:
+                pass
+        return result
+
+    with st.spinner("시장 데이터 불러오는 중..."):
+        mkt = get_market_data()
+
+    if mkt:
+        cols = st.columns(len(mkt))
+        icons = {"코스피":"🇰🇷","코스닥":"📊","나스닥":"🇺🇸","달러/원":"💵","VIX(공포지수)":"😨"}
+        for col, (name, data) in zip(cols, mkt.items()):
+            chg = data["chg"]
+            color = "#4ade80" if chg >= 0 else "#f87171"
+            sign  = "▲" if chg >= 0 else "▼"
+            # 달러/원은 소수점 2자리, 나머지는 정수
+            if name == "달러/원":
+                val_str = f"{data['cur']:,.2f}"
+            elif name == "VIX(공포지수)":
+                val_str = f"{data['cur']:.2f}"
+            else:
+                val_str = f"{data['cur']:,.2f}"
+            col.markdown(f"""
+<div style='background:#151820;border:1px solid #1e2130;border-radius:12px;padding:18px 16px;text-align:center;'>
+  <div style='font-size:22px;margin-bottom:4px;'>{icons.get(name,"📈")}</div>
+  <div style='font-size:11px;color:#4a5060;letter-spacing:0.1em;margin-bottom:6px;'>{name}</div>
+  <div style='font-size:20px;font-weight:700;color:#f0f2f8;font-family:DM Mono,monospace;'>{val_str}</div>
+  <div style='font-size:13px;color:{color};margin-top:4px;font-weight:600;'>{sign} {abs(chg):.2f}%</div>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 시장 해석 코멘트
+    if mkt:
+        vix = mkt.get("VIX(공포지수)", {}).get("cur", 20)
+        usd = mkt.get("달러/원", {}).get("chg", 0)
+        kospi_chg = mkt.get("코스피", {}).get("chg", 0)
+        nasdaq_chg = mkt.get("나스닥", {}).get("chg", 0)
+
+        comments = []
+        if vix >= 30:
+            comments.append("😨 **VIX 30 이상** — 시장 공포 구간, 단기 변동성 주의")
+        elif vix <= 15:
+            comments.append("😊 **VIX 15 이하** — 시장 안정, 투자 심리 양호")
+        else:
+            comments.append(f"😐 **VIX {vix:.1f}** — 보통 수준의 변동성")
+
+        if usd > 0.5:
+            comments.append("💵 **원화 약세** — 외국인 매도 압력 가능성, 코스피 주의")
+        elif usd < -0.5:
+            comments.append("💵 **원화 강세** — 외국인 유입 기대, 코스피 긍정적")
+
+        if nasdaq_chg > 1:
+            comments.append("🇺🇸 **나스닥 강세** — 다음 거래일 코스피 상승 기대")
+        elif nasdaq_chg < -1:
+            comments.append("🇺🇸 **나스닥 약세** — 다음 거래일 코스피 하락 주의")
+
+        st.markdown("#### 💬 시장 해석")
+        for c in comments:
+            st.markdown(f"• {c}")
+
+    st.markdown("---")
+    st.markdown("<div style='text-align:center;color:#2a3040;font-size:13px;padding:20px 0;'>사이드바에서 종목 분석 또는 Top5 추천을 선택하세요</div>", unsafe_allow_html=True)
 # ── 개별 종목 분석
 elif st.session_state.mode == "analyze":
     ticker = search_ticker(ticker_input)
